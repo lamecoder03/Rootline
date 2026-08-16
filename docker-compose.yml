@@ -1,0 +1,29 @@
+# Postgres 15 — the single analytical database behind the whole pipeline.
+# Exists so dbt, the detection job, and the agent all read one warehouse instead of files.
+# Runs one container with credentials from .env and a named volume, so data survives restarts.
+# Airflow joins this stack on Day 6; deliberately absent until then.
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: revenue_anomaly_postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    name: revenue_anomaly_postgres_data

@@ -1,0 +1,67 @@
+# Keeps secrets, generated data, and local tooling state out of the repo.
+# Exists so a clone contains only source — code, config templates, and docs.
+# Covers Python, dbt, environment files, Docker artifacts, and editor/OS noise.
+
+# --- Environment / secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+secrets/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+venv/
+.venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# --- dbt ---
+target/
+dbt_packages/
+dbt_modules/
+logs/
+.user.yml
+profiles.yml
+
+# --- Docker ---
+.docker/
+docker-compose.override.yml
+
+# --- Generated data ---
+data/raw/*.csv
+data/raw/*.parquet
+data/raw/*.json
+!data/raw/.gitkeep
+
+# --- Agent audit output (runtime, not source) ---
+agent/audit/*.jsonl
+agent/audit/*.log
+!agent/audit/.gitkeep
+
+# --- Power BI ---
+*.pbix.bak
+~$*.pbix
+
+# --- Editor / OS ---
+.claude/settings.local.json
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
