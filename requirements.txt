@@ -1,0 +1,11 @@
+# Python dependencies for the generator and loader layer.
+# Exists so the synthetic-data step reproduces from a clean clone with `pip install -r`.
+# faker/holidays fabricate realistic values, pandas shapes them, sqlalchemy+psycopg2 load
+# them into the Postgres `raw` schema, python-dotenv supplies credentials.
+
+faker
+pandas
+sqlalchemy
+psycopg2-binary
+python-dotenv
+holidays
