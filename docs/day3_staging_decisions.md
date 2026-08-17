@@ -376,15 +376,47 @@ certificate validation. Two interpreters is the honest resolution.
 ```
 py -3.13 -m venv .venv-dbt
 .venv-dbt\Scripts\pip install -r requirements-dbt.txt
-
-.venv-dbt\Scripts\dotenv run -- .venv-dbt\Scripts\dbt build ^
-  --project-dir dbt\revenue_anomaly --profiles-dir dbt\revenue_anomaly
 ```
 
-`dotenv run` loads `.env` into the environment before dbt starts. That is what lets
-`profiles.yml` be committed to git: it contains only `env_var()` lookups, so the repository
-holds the shape of the connection and never the credential. `.gitignore` ignores `profiles.yml`
-everywhere by default and re-includes this one specific file, with a comment saying why.
+Then every dbt command goes through the wrapper:
+
+```
+run_dbt.bat debug
+run_dbt.bat build
+run_dbt.bat test --select stg_product_master
+```
+
+### Why the wrapper exists
+
+dbt's `env_var()` reads the process environment. Nothing populates that environment from
+`.env` — and it is worth being precise about why, because the file *looks* like it is being
+read by everything.
+
+Three components need these credentials, and each gets them a different way. Docker Compose
+reads `.env` natively, because Compose has that behaviour built in. The loader in
+`generators/load_to_postgres.py` calls `load_dotenv()` explicitly — `python-dotenv` is a Python
+library that a program has to invoke on itself, not something that alters the shell. dbt is a
+third-party binary that makes neither of those calls, so it was the one component with no path
+from the file to its environment. It fails with an `env_var` error, which reads like a broken
+profile and is not.
+
+`run_dbt.bat` closes that gap. It parses `.env` into real environment variables, then calls dbt
+with `--project-dir` and `--profiles-dir` already set. It parses the file natively rather than
+shelling out to a Python helper, so it has no dependency of its own; it anchors every path to
+the repo root, so it runs from any working directory; it propagates dbt's exit code, so a failed
+build still fails a caller such as the Day 6 Airflow task; and it fails with a readable message
+if `.env`, the venv, or `POSTGRES_PASSWORD` is missing rather than letting dbt fail obscurely.
+
+One Windows detail worth knowing, because it cost a debugging cycle: **cmd.exe silently
+mis-parses a `.bat` file saved with LF line endings**, eating the leading characters of each
+line so `setlocal` becomes `local` and `set "X=1"` becomes `"X=1"`. The errors point at
+nonsense commands rather than at the real cause. `.gitattributes` now pins `*.bat` to CRLF so
+a clone with `core.autocrlf=false` cannot reintroduce it.
+
+This wrapper is also what lets `profiles.yml` be committed to git: it contains only `env_var()`
+lookups, so the repository holds the shape of the connection and never the credential.
+`.gitignore` ignores `profiles.yml` everywhere by default and re-includes this one specific
+file, with a comment saying why.
 
 Staging models land in the `staging` schema, and Day 4's marts will land in `analytics`. dbt's
 default behaviour would have produced `analytics_staging` by prefixing the target schema, so

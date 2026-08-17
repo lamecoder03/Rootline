@@ -1,0 +1,17 @@
+# Pins line endings per file type so a clone works regardless of the user's autocrlf setting.
+# Exists because cmd.exe silently mis-parses a .bat file that has LF endings — it eats the
+# leading characters of each line — which would break run_dbt.bat on a fresh clone.
+# Batch files are forced to CRLF; SQL, YAML and docs are normalised to LF in the repo.
+
+* text=auto
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+*.sql text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.py  text eol=lf
+*.md  text eol=lf
+*.csv text eol=lf
