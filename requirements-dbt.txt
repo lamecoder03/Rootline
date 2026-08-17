@@ -1,0 +1,11 @@
+# Python dependencies for the dbt transformation layer, installed into a SEPARATE venv.
+# Exists because dbt 1.11 pins mashumaro<3.15, which fails to import on Python 3.14 — so dbt
+# runs on Python 3.13 in .venv-dbt while the generators stay on 3.14 in .venv.
+# Set up with:  py -3.13 -m venv .venv-dbt  &&  .venv-dbt\Scripts\pip install -r requirements-dbt.txt
+
+dbt-core==1.11.13
+dbt-postgres==1.11.0
+
+# Supplies the `dotenv run` wrapper that feeds .env into dbt, so no credential is ever typed
+# on a command line or stored in profiles.yml.
+python-dotenv[cli]==1.2.3

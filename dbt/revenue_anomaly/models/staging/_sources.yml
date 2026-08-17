@@ -1,0 +1,41 @@
+# Declares the five raw tables the Day 2 loader lands, so models reach them through
+# {{ source(...) }} instead of a hardcoded schema name.
+# Exists so dbt's lineage graph starts at the real ingest boundary and a schema rename is a
+# one-file change rather than a search-and-replace across every model.
+
+version: 2
+
+sources:
+  - name: raw
+    schema: raw
+    description: >
+      Landing zone written by generators/load_to_postgres.py, replaced in full on every run.
+      Date columns arrive typed; the deliberately messy columns arrive as TEXT so that
+      cleaning them is a visible, tested transformation rather than a load-time side effect.
+    tables:
+      - name: daily_revenue
+        description: >
+          Daily revenue at date x category x channel x region — 731 days x 60 cells = 43,860
+          rows. Carries the three injected anomalies unflagged; the answer key lives outside
+          the warehouse in docs/ground_truth_anomalies.md.
+
+      - name: marketing_spend
+        description: >
+          Daily marketing spend at date x channel x category — 10,965 rows. Deliberately one
+          grain coarser than revenue (no region), as real media budgets are.
+
+      - name: product_master
+        description: >
+          Union of two mock source systems, erp_prod and shopify_export. 158 rows describing
+          120 real SKUs: case- and whitespace-scrambled keys, 24 category spellings, two date
+          formats, and independently applied nulls in four columns.
+
+      - name: inventory_snapshot
+        description: >
+          Daily stock level and reorder point per SKU — 731 days x 120 SKUs = 87,720 rows.
+          Carries the ANOM-02 West-region Electronics stockout plus incidental stockouts.
+
+      - name: holiday_calendar
+        description: >
+          US federal holidays plus Black Friday and Cyber Monday across the series range —
+          30 rows. Gives the agent a legitimate external explanation to test swings against.

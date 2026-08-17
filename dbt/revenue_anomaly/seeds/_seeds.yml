@@ -1,0 +1,53 @@
+# Reference data the staging layer joins against, version-controlled as CSV rather than
+# buried in a CASE statement so a new source-system spelling is a one-line, reviewable edit.
+# Exists because category reconciliation is a business mapping, not program logic.
+# Both seeds are keyed on a normalised lookup value and tested for uniqueness.
+
+version: 2
+
+seeds:
+  - name: category_alias_map
+    description: >
+      Maps a normalised category spelling to its canonical label. The match key is the raw
+      value lowercased with every non-alphanumeric character stripped, which collapses the 24
+      raw spellings in raw.product_master down to the 10 genuine synonyms listed here.
+    config:
+      column_types:
+        category_match_key: varchar(50)
+        category_canonical: varchar(50)
+        example_source_spellings: varchar(200)
+    columns:
+      - name: category_match_key
+        description: "Normalised lookup key: lower(regexp_replace(category_raw, '[^a-zA-Z0-9]', '', 'g'))."
+        data_tests:
+          - unique
+          - not_null
+      - name: category_canonical
+        description: "The single approved spelling used everywhere downstream."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Electronics', 'Apparel', 'Home & Garden', 'Sports', 'Beauty']
+
+  - name: sku_prefix_category_map
+    description: >
+      Maps the four-letter SKU prefix to its category. Used only as the last-resort category
+      imputation for SKUs whose category is null in every source row, so the inference rests
+      on the company's own SKU encoding rather than on a guess.
+    config:
+      column_types:
+        sku_prefix: varchar(10)
+        category_canonical: varchar(50)
+    columns:
+      - name: sku_prefix
+        description: "Leading segment of the normalised sku_id, e.g. ELEC in ELEC-0001."
+        data_tests:
+          - unique
+          - not_null
+      - name: category_canonical
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Electronics', 'Apparel', 'Home & Garden', 'Sports', 'Beauty']

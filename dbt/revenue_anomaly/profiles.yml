@@ -1,0 +1,18 @@
+# dbt connection profile for the local Postgres container.
+# Exists so dbt runs from the host venv against the containerised warehouse while holding
+# no credential itself — every value is read from .env at run time via env_var.
+# Host/port are the published address (localhost:5433); the container listens on 5432 inside.
+
+revenue_anomaly:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5433') | int }}"
+      user: "{{ env_var('POSTGRES_USER') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD') }}"
+      dbname: "{{ env_var('POSTGRES_DB') }}"
+      schema: analytics
+      threads: 4
+      keepalives_idle: 0

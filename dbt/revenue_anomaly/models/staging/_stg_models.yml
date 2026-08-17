@@ -1,0 +1,285 @@
+# Documentation and tests for the staging layer — the contract Day 4's marts build on.
+# Exists so the cleaning is proven rather than asserted: the tests here fail loudly if a
+# category spelling survives, a grain doubles up, or a SKU key stops reconciling.
+# Uses the dbt >= 1.11 spelling: `data_tests:` with generic-test args under `arguments:`.
+
+version: 2
+
+models:
+
+  # ------------------------------------------------------------------------------------
+  - name: stg_daily_revenue
+    description: >
+      Typed daily revenue. Grain: one row per order_date x category x channel x region,
+      declared by revenue_key. 43,860 rows. The three injected anomalies are present but
+      unflagged — detecting them is Day 5's job, not staging's.
+    columns:
+      - name: revenue_key
+        description: "md5 surrogate key over the four grain columns. Composite grain in one testable column."
+        data_tests:
+          - unique
+          - not_null
+
+      - name: order_date
+        description: "Calendar date of the orders. 2024-01-01 to 2025-12-31, no gaps."
+        data_tests:
+          - not_null
+
+      - name: category
+        description: "Product category. Already canonical in this source; tested to keep it that way."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Electronics', 'Apparel', 'Home & Garden', 'Sports', 'Beauty']
+          - relationships:
+              arguments:
+                to: ref('stg_product_master')
+                field: category
+
+      - name: channel
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Web', 'Mobile App', 'Marketplace']
+
+      - name: region
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['North', 'East', 'South', 'West']
+
+      - name: orders
+        data_tests: [not_null]
+      - name: units
+        data_tests: [not_null]
+      - name: gross_revenue
+        description: "Revenue in USD, numeric(14,2). Cast off double precision so money never rounds by float."
+        data_tests: [not_null]
+
+  # ------------------------------------------------------------------------------------
+  - name: stg_marketing_spend
+    description: >
+      Typed daily marketing spend. Grain: one row per spend_date x channel x category,
+      declared by spend_key. 10,965 rows. Deliberately one grain coarser than revenue —
+      it has no region — and left that way on purpose. Allocating spend across regions is a
+      business decision, so it belongs in the Day 4 mart where it is visible, not hidden
+      inside a model whose stated job is cleaning.
+    columns:
+      - name: spend_key
+        data_tests:
+          - unique
+          - not_null
+
+      - name: spend_date
+        data_tests: [not_null]
+
+      - name: channel
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Web', 'Mobile App', 'Marketplace']
+
+      - name: category
+        description: "Tested against the product dimension — proves spend speaks the same category language as products."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Electronics', 'Apparel', 'Home & Garden', 'Sports', 'Beauty']
+          - relationships:
+              arguments:
+                to: ref('stg_product_master')
+                field: category
+
+      - name: spend_usd
+        data_tests: [not_null]
+      - name: impressions
+        data_tests: [not_null]
+      - name: clicks
+        data_tests: [not_null]
+
+  # ------------------------------------------------------------------------------------
+  - name: stg_product_master
+    description: >
+      The cleaned product dimension: exactly one row per real SKU, 120 rows from 158 raw
+      rows. Categories reconciled to five canonical values, SKU keys normalised, duplicates
+      merged field-by-field in completeness-then-recency order. Missing values are flagged
+      rather than silently imputed except where noted. Every discarded raw row remains
+      inspectable in stg_product_master_dedup_audit.
+    columns:
+      - name: sku_id
+        description: "Normalised key: upper(replace(trim(sku_id), '_', '-')). The join key everything else uses."
+        data_tests:
+          - unique
+          - not_null
+
+      - name: category
+        description: >
+          Canonical category. Resolved in three steps: mapped value from any of this SKU's
+          source rows, then SKU-prefix inference, then 'Unknown'. The accepted_values test
+          below is the proof that all 24 raw spellings were reconciled — it fails if even one
+          survived, and it fails if any SKU fell through to 'Unknown'.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Electronics', 'Apparel', 'Home & Garden', 'Sports', 'Beauty']
+
+      - name: subcategory
+        description: "Verified complete in the source — no missing-value policy needed."
+        data_tests: [not_null]
+
+      - name: primary_region
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['North', 'East', 'South', 'West']
+
+      - name: launch_date
+        description: >
+          Parsed from two source formats by matching the string's shape, not by trusting the
+          source_system label — so a system that changes its export format fails loudly
+          instead of silently mis-parsing day and month.
+        data_tests: [not_null]
+
+      - name: product_name
+        description: "NULL where the source was blank. Kept NULL, not placeholdered — display fallback is a mart decision."
+      - name: unit_cost
+        description: "NULL where the source was missing. Deliberately not imputed: it feeds margin maths, and a plausible fabricated cost is worse than a NULL that breaks a SUM."
+      - name: supplier
+        description: "NULL where the source was missing. Deliberately not imputed: the agent names suppliers in briefs a human acts on."
+
+      - name: source_row_count
+        description: "How many raw rows collapsed into this one. 1, 2, or 3."
+        data_tests: [not_null]
+      - name: source_system_count
+        description: "How many of the two source systems carried this SKU."
+        data_tests: [not_null]
+      - name: was_deduplicated
+        data_tests: [not_null]
+      - name: category_was_imputed
+        description: "True where no source row for this SKU had a mappable category and the SKU prefix was used."
+        data_tests: [not_null]
+      - name: has_missing_unit_cost
+        data_tests: [not_null]
+      - name: has_missing_supplier
+        data_tests: [not_null]
+      - name: has_missing_product_name
+        data_tests: [not_null]
+
+  # ------------------------------------------------------------------------------------
+  - name: stg_product_master_dedup_audit
+    description: >
+      The audit trail for the dedupe — one row per raw product row, all 158 retained.
+      Materialised as a table, not a view, because it is evidence: it should persist as it
+      was at run time. Shows each row's completeness score, its rank within its SKU, whether
+      it survived, and which specific field it donated to the merged record.
+    columns:
+      - name: audit_key
+        data_tests:
+          - unique
+          - not_null
+      - name: sku_id
+        description: "Normalised SKU. Every value must exist in the cleaned dimension."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_product_master')
+                field: sku_id
+      - name: sku_id_source_value
+        description: "The key exactly as the source system wrote it, e.g. ' ELEC-0031 ' or 'BEAU_0018'."
+        data_tests: [not_null]
+      - name: source_system
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['erp_prod', 'shopify_export']
+      - name: source_row_rank
+        description: "1 is the surviving primary. Ordered by completeness, then recency, then a deterministic md5 tiebreak."
+        data_tests: [not_null]
+      - name: was_kept_as_primary
+        data_tests: [not_null]
+      - name: duplicate_group_size
+        data_tests: [not_null]
+      - name: has_cross_system_duplicate
+        description: "This SKU was present in both erp_prod and shopify_export."
+        data_tests: [not_null]
+      - name: has_intra_system_duplicate
+        description: "This SKU was double-entered inside a single source system."
+        data_tests: [not_null]
+
+  # ------------------------------------------------------------------------------------
+  - name: stg_inventory_snapshot
+    description: >
+      Typed daily stock levels. Grain: one row per snapshot_date x sku_id, declared by
+      inventory_key. 87,720 rows = 731 days x 120 SKUs. Carries the ANOM-02 stockout and
+      incidental stockouts elsewhere, so the event cannot be found by grepping for zeroes.
+      No derived flags such as is_stockout — that is mart work, not cleaning.
+    columns:
+      - name: inventory_key
+        data_tests:
+          - unique
+          - not_null
+      - name: snapshot_date
+        data_tests: [not_null]
+      - name: sku_id
+        description: >
+          Normalised with the identical expression stg_product_master uses. The relationships
+          test below is what proves the two normalisations agree — if they ever diverge, the
+          product join breaks and this fails first.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_product_master')
+                field: sku_id
+      - name: region
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['North', 'East', 'South', 'West']
+      - name: units_on_hand
+        data_tests: [not_null]
+      - name: reorder_point
+        data_tests: [not_null]
+
+  # ------------------------------------------------------------------------------------
+  - name: stg_holiday_calendar
+    description: >
+      Typed US holiday and retail-event calendar. Grain: one row per holiday_date, which is
+      the natural key. 30 rows. Lets a swing be ruled out as a calendar effect before it is
+      reported as an incident.
+    columns:
+      - name: holiday_date
+        data_tests:
+          - unique
+          - not_null
+      - name: holiday_name
+        data_tests: [not_null]
+      - name: country_code
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['US']
+      - name: is_federal_holiday
+        data_tests: [not_null]
+      - name: is_retail_event
+        data_tests: [not_null]
+      - name: retail_significance
+        description: "Qualitative retail weight, lowercased. Not the multiplier the simulation used — the agent gets a prior, not the answer key."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['low', 'medium', 'high']
+      - name: day_of_week
+        data_tests: [not_null]

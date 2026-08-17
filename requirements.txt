@@ -1,7 +1,8 @@
-# Python dependencies for the generator and loader layer.
+# Python dependencies for the generator and loader layer (.venv, Python 3.14).
 # Exists so the synthetic-data step reproduces from a clean clone with `pip install -r`.
 # faker/holidays fabricate realistic values, pandas shapes them, sqlalchemy+psycopg2 load
 # them into the Postgres `raw` schema, python-dotenv supplies credentials.
+# dbt is deliberately NOT here — it needs Python 3.13; see requirements-dbt.txt.
 
 faker
 pandas

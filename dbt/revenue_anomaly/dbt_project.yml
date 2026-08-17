@@ -1,0 +1,32 @@
+# dbt project config — names the project, binds it to the `revenue_anomaly` profile, and
+# sets the per-layer defaults every model inherits.
+# Exists so `dbt build` knows where models live and which schema each layer lands in.
+# Staging materialises as views in `staging`; Day 4's marts will land in `analytics`.
+
+name: 'revenue_anomaly'
+version: '1.0.0'
+config-version: 2
+
+profile: 'revenue_anomaly'
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+flags:
+  send_anonymous_usage_stats: false
+
+models:
+  revenue_anomaly:
+    staging:
+      +materialized: view
+      +schema: staging
+
+seeds:
+  revenue_anomaly:
+    +schema: staging
