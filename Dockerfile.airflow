@@ -1,0 +1,27 @@
+# Airflow image for the containerised pipeline, extending the official Linux base.
+# Exists because run_dbt.bat and the two Windows virtualenvs cannot execute inside a Linux
+# container - the DAG needs Linux-native builds of the same dependency sets.
+# Builds two isolated venvs from the SAME requirements files the host venvs use, so the
+# container and local-dev paths cannot drift apart without the change being visible in git.
+
+FROM apache/airflow:3.1.0
+
+# dbt and the project libraries are installed side by side but never in the same interpreter:
+# dbt pins jinja2, mashumaro and protobuf to ranges that collide with Airflow's own constraint
+# set and with scipy/pandas. Separate venvs mean an Airflow upgrade cannot break dbt.
+USER root
+RUN mkdir -p /opt/venvs /opt/project && chown -R airflow: /opt/venvs /opt/project
+USER airflow
+
+COPY --chown=airflow: requirements.txt requirements-dbt.txt /tmp/
+
+RUN python -m venv /opt/venvs/project \
+    && /opt/venvs/project/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/venvs/project/bin/pip install --no-cache-dir -r /tmp/requirements.txt
+
+RUN python -m venv /opt/venvs/dbt \
+    && /opt/venvs/dbt/bin/pip install --no-cache-dir --upgrade pip \
+    && /opt/venvs/dbt/bin/pip install --no-cache-dir -r /tmp/requirements-dbt.txt
+
+COPY --chown=airflow: docker/airflow-entrypoint.sh /opt/airflow-entrypoint.sh
+ENTRYPOINT ["/opt/airflow-entrypoint.sh"]

@@ -1,0 +1,17 @@
+# Keeps the Docker build context small and secrets out of the image.
+# Exists because the repo root holds two Windows virtualenvs and a .git history that would
+# otherwise be shipped into every build, and .env which must never enter an image layer.
+# Only requirements files are actually COPYed; project code arrives by bind mount at run time.
+
+.venv/
+.venv-dbt/
+.git/
+.env
+.env.*
+!.env.example
+**/__pycache__/
+**/target/
+**/logs/
+data/raw/*.csv
+dashboards/
+*.pbix

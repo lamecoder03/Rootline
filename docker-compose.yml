@@ -1,7 +1,8 @@
-# Postgres 15 — the single analytical database behind the whole pipeline.
-# Exists so dbt, the detection job, and the agent all read one warehouse instead of files.
-# Runs one container with credentials from .env and a named volume, so data survives restarts.
-# Airflow joins this stack on Day 6; deliberately absent until then.
+# The whole local stack: Postgres as the analytical warehouse, Airflow as the orchestrator.
+# Exists so dbt, the detection job, and the agent all read one warehouse instead of files, and
+# so the ingest -> transform -> detect pipeline can run unattended rather than by hand.
+# Credentials come from .env for both services; only the warehouse ADDRESS differs between
+# them, because Airflow reaches Postgres over the internal network rather than the host port.
 
 services:
   postgres:
@@ -24,6 +25,69 @@ services:
       timeout: 5s
       retries: 5
 
+  # Single-container Airflow: scheduler, API server and triggerer in one `airflow standalone`
+  # process. One linear three-task DAG does not justify a Celery/Redis deployment, and the
+  # locked scope excludes one. Metadata lives in the Postgres already running here.
+  airflow:
+    build:
+      context: .
+      dockerfile: Dockerfile.airflow
+    image: revenue_anomaly_airflow:local
+    container_name: revenue_anomaly_airflow
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # --- Warehouse connection ------------------------------------------------------------
+      # User, password and database come from .env, the single source of truth shared with the
+      # host tooling. HOST and PORT are deliberately overridden: inside the compose network the
+      # warehouse is the service name on 5432, whereas the host reaches it on localhost:5433.
+      # These names match exactly what load_to_postgres.py, detection/persist.py and dbt's
+      # profiles.yml already read from the environment, so no project code changes for Docker.
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+
+      # --- Airflow itself ------------------------------------------------------------------
+      AIRFLOW_METADATA_DB: airflow
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: >-
+        postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/airflow
+      AIRFLOW__API__PORT: 8080
+
+      # --- Paths the DAG uses --------------------------------------------------------------
+      # dbt writes target/ and logs/, but the project is bind-mounted read-only, so both are
+      # redirected to container-local scratch space.
+      PROJECT_ROOT: /opt/project
+      DBT_PROJECT_DIR: /opt/project/dbt/revenue_anomaly
+      DBT_TARGET_PATH: /tmp/dbt/target
+      DBT_LOG_PATH: /tmp/dbt/logs
+    ports:
+      - "8080:8080"
+    volumes:
+      # DAGs and project code are bind-mounted read-only: the container executes the same
+      # source the host does, and cannot write back into the working tree.
+      - ./dags:/opt/airflow/dags:ro
+      - ./generators:/opt/project/generators:ro
+      - ./detection:/opt/project/detection:ro
+      - ./dbt:/opt/project/dbt:ro
+      - ./data:/opt/project/data:ro
+      # .env is deliberately NOT mounted. Compose reads it on the host to fill the variables
+      # above, so the container never needs the file and the secret stays out of its filesystem.
+      - airflow_logs:/opt/airflow/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/api/v2/version || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 10
+      start_period: 90s
+
 volumes:
   postgres_data:
     name: revenue_anomaly_postgres_data
+  airflow_logs:
+    name: revenue_anomaly_airflow_logs

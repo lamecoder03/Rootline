@@ -9,6 +9,10 @@
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
 
+# Shell scripts run inside Linux containers and MUST be LF: a CRLF shebang line makes the
+# kernel look for an interpreter named "/usr/bin/env bash", which fails as "no such file".
+*.sh  text eol=lf
+
 *.sql text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf

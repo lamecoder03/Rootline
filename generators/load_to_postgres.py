@@ -54,8 +54,11 @@ def build_engine():
 
 
 def load_table(engine, filename, table_name, date_columns):
-    """Reads one generator CSV and replaces its target table wholesale.
-    Returns the row count so the caller can report what actually landed."""
+    """Reads one generator CSV and refills its target table wholesale.
+    TRUNCATE-then-append rather than drop-and-recreate: once dbt has built, staging views
+    depend on these tables and Postgres refuses to DROP a table with dependents. Truncating
+    keeps the table and its dependent views intact, so the loader stays re-runnable.
+    Falls back to creating the table on a cold database. Returns the row count that landed."""
     path = RAW_DIR / filename
     if not path.exists():
         raise SystemExit(f"{path} not found. Run the generators before loading.")
@@ -64,17 +67,38 @@ def load_table(engine, filename, table_name, date_columns):
     for column in date_columns:
         frame[column] = frame[column].dt.date
 
+    if table_exists(engine, table_name):
+        with engine.begin() as connection:
+            connection.execute(text(f"TRUNCATE TABLE {RAW_SCHEMA}.{table_name}"))
+        write_mode = "append"
+    else:
+        write_mode = "replace"
+
     frame.to_sql(
         table_name,
         engine,
         schema=RAW_SCHEMA,
-        if_exists="replace",
+        if_exists=write_mode,
         index=False,
         chunksize=CHUNK_SIZE,
         method="multi",
         dtype={column: Date() for column in date_columns},
     )
     return len(frame)
+
+
+def table_exists(engine, table_name):
+    """True if the raw table is already present, which decides between truncate and create."""
+    with engine.connect() as connection:
+        return bool(
+            connection.execute(
+                text(
+                    "select 1 from information_schema.tables "
+                    "where table_schema = :schema and table_name = :table"
+                ),
+                {"schema": RAW_SCHEMA, "table": table_name},
+            ).scalar()
+        )
 
 
 def main():
