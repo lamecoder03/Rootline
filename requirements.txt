@@ -5,6 +5,9 @@
 # scipy supplies the t-distribution used by the Day 5 detector's hypothesis test; the
 # baseline has only ~8 same-weekday observations, so a normal approximation understates
 # the tails badly (p=0.0027 vs 0.0199 at |z|=3) and would inflate false positives.
+# sqlglot parses every query the Day 7 agent guardrail inspects. An AST is the point: a
+# keyword blocklist cannot see a DROP hidden behind a second statement and false-positives on
+# a column honestly named delete_reason.
 # dbt is deliberately NOT here — it needs Python 3.13; see requirements-dbt.txt.
 
 faker
@@ -14,3 +17,4 @@ psycopg2-binary
 python-dotenv
 holidays
 scipy
+sqlglot
