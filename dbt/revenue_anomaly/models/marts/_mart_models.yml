@@ -1,0 +1,238 @@
+# Documentation and tests for the analytics marts -- the only schema Power BI, the Day 5
+# detector and the Day 8 agent are ever pointed at.
+# Exists so the contract those three consumers depend on is stated and enforced here rather
+# than rediscovered downstream. Uses the dbt >= 1.11 `arguments:` spelling for test args.
+
+version: 2
+
+models:
+
+  # ------------------------------------------------------------------------------------
+  - name: fct_daily_revenue
+    description: >
+      The core revenue fact. Grain: one row per order_date x category x channel x region,
+      43,860 rows -- identical to stg_daily_revenue, because every join here is one-to-one or
+      many-to-one and none of them may change the row count. Carries region-allocated marketing
+      spend, calendar context, and the category cost-basis coverage.
+    columns:
+      - name: revenue_key
+        description: "md5 over the four grain columns, inherited unchanged from staging so the fact ties back row for row."
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_daily_revenue')
+                field: revenue_key
+
+      - name: order_date
+        data_tests: [not_null]
+
+      - name: category
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Electronics', 'Apparel', 'Home & Garden', 'Sports', 'Beauty']
+          - relationships:
+              arguments:
+                to: ref('dim_product')
+                field: category
+
+      - name: channel
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Web', 'Mobile App', 'Marketplace']
+
+      - name: region
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['North', 'East', 'South', 'West']
+
+      - name: orders
+        data_tests: [not_null]
+      - name: units
+        data_tests: [not_null]
+      - name: gross_revenue
+        data_tests: [not_null]
+
+      - name: marketing_spend_usd
+        description: "Spend allocated down to this region. Sums back to the source cell exactly."
+        data_tests: [not_null]
+      - name: spend_allocation_basis
+        description: "Which allocation rule produced marketing_spend_usd on this row."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['trailing_28d_revenue_share', 'even_split_no_history']
+      - name: return_on_ad_spend
+        description: "gross_revenue divided by marketing_spend_usd. NULL where allocated spend is zero rather than dividing by zero."
+
+      - name: is_holiday
+        description: "Lets a swing be ruled out as a calendar effect before it is reported as an incident."
+        data_tests: [not_null]
+      - name: is_retail_event
+        data_tests: [not_null]
+      - name: retail_significance
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['low', 'medium', 'high', 'none']
+      - name: day_of_week
+        data_tests: [not_null]
+      - name: is_weekend
+        data_tests: [not_null]
+
+      - name: skus_excluded_from_cost_basis
+        description: "How many SKUs in this category have no unit_cost. Travels on the fact so the gap is visible without opening the margin mart."
+        data_tests: [not_null]
+
+  # ------------------------------------------------------------------------------------
+  - name: fct_daily_margin
+    description: >
+      Estimated gross margin at the revenue grain, 43,860 rows. Costs units at the category
+      average unit cost computed over costed SKUs ONLY -- the 8 SKUs with no unit_cost are
+      excluded from the basis rather than imputed, and every row states how many were excluded
+      and what percentage of the category the basis covers. Margin is explicitly an estimate:
+      revenue is recorded per category while cost is known per SKU.
+    columns:
+      - name: margin_key
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fct_daily_revenue')
+                field: revenue_key
+      - name: order_date
+        data_tests: [not_null]
+      - name: category
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_product')
+                field: category
+      - name: channel
+        data_tests: [not_null]
+      - name: region
+        data_tests: [not_null]
+      - name: gross_revenue
+        data_tests: [not_null]
+      - name: cost_basis_avg_unit_cost
+        description: "Average unit cost over costed SKUs in this category only."
+        data_tests: [not_null]
+      - name: estimated_cogs
+        description: "units multiplied by cost_basis_avg_unit_cost. NULL only if the category has no costed SKU at all."
+      - name: estimated_gross_margin
+        description: "gross_revenue minus estimated_cogs. An estimate, not booked margin."
+      - name: is_margin_estimable
+        description: "False if the category has zero costed SKUs; margin columns are then NULL by design, not by accident."
+        data_tests: [not_null]
+      - name: cost_basis_is_complete
+        description: "True only where every SKU in the category has a unit_cost."
+        data_tests: [not_null]
+      - name: skus_excluded_from_cost_basis
+        description: "The visible exclusion count. Never NULL -- a margin cannot be read without it."
+        data_tests: [not_null]
+      - name: cost_basis_coverage_pct
+        description: "Percentage of the category SKUs that carry a unit_cost."
+        data_tests: [not_null]
+      - name: excluded_sku_ids
+        description: "The specific SKUs left out of the cost basis, so the gap is auditable and not just counted."
+
+  # ------------------------------------------------------------------------------------
+  - name: fct_daily_stockout
+    description: >
+      Daily stock health at snapshot_date x category x region, materialised as a view. Joins to
+      fct_daily_revenue on date, category and region -- many-to-one, because stock is not
+      channel-specific. This is the inventory evidence for ANOM-02, which by design has no
+      marketing-spend footprint and therefore cannot be explained from the spend table.
+    columns:
+      - name: stockout_key
+        description: "md5 over date x category x region."
+        data_tests:
+          - unique
+          - not_null
+      - name: snapshot_date
+        data_tests: [not_null]
+      - name: category
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_product')
+                field: category
+      - name: region
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['North', 'East', 'South', 'West']
+      - name: skus_tracked
+        data_tests: [not_null]
+      - name: skus_out_of_stock
+        data_tests: [not_null]
+      - name: skus_below_reorder_point
+        data_tests: [not_null]
+      - name: total_units_on_hand
+        data_tests: [not_null]
+      - name: stockout_rate_pct
+        data_tests: [not_null]
+      - name: has_stockout
+        description: "True if any tracked SKU in this category and region was at zero stock."
+        data_tests: [not_null]
+      - name: is_total_stockout
+        description: "True only if every tracked SKU was at zero -- the shape ANOM-02 takes in West Electronics."
+        data_tests: [not_null]
+      - name: stocked_out_sku_ids
+        description: "Which SKUs were at zero, so a brief can name them rather than merely count them."
+
+  # ------------------------------------------------------------------------------------
+  - name: dim_product
+    description: >
+      The product dimension, one row per SKU, 120 rows. Adds is_margin_calculable so the
+      question of whether a SKU can be costed is answered once, here, instead of being
+      rediscovered as a NULL in every downstream margin calculation.
+    columns:
+      - name: sku_id
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_product_master')
+                field: sku_id
+      - name: product_name
+        description: "NULL where the source was blank. A display label, never a key."
+      - name: category
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Electronics', 'Apparel', 'Home & Garden', 'Sports', 'Beauty']
+      - name: subcategory
+        data_tests: [not_null]
+      - name: unit_cost
+        description: "NULL for 8 SKUs. Deliberately never imputed -- see docs/day3_staging_decisions.md."
+      - name: is_margin_calculable
+        description: "Whether unit_cost is present. The single flag every margin mart filters its cost basis on."
+        data_tests: [not_null]
+      - name: primary_region
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['North', 'East', 'South', 'West']
+      - name: launch_date
+        data_tests: [not_null]
+      - name: has_missing_unit_cost
+        data_tests: [not_null]
+      - name: was_deduplicated
+        data_tests: [not_null]

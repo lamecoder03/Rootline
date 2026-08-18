@@ -1,0 +1,114 @@
+# Documentation and tests for the intermediate layer -- the business-logic step between
+# cleaning and consumption, kept in its own schema so `analytics` holds only consumer tables.
+# Exists because the spend allocation is an assumption that deserves its own tested object
+# rather than being buried inside a fact. Uses the dbt >= 1.11 `arguments:` spelling.
+
+version: 2
+
+models:
+
+  - name: int_marketing_spend_allocated
+    description: >
+      Marketing spend split from date x channel x category down to date x channel x category x
+      region. The allocation rule is each region's trailing 28-day share of that channel and
+      category's revenue, deliberately excluding the current day so an anomaly cannot influence
+      its own explanation. Rounding residue goes to the largest-share region, so every cell
+      reconciles to source to the cent. 43,860 rows.
+    columns:
+      - name: spend_allocation_key
+        description: "md5 over date x channel x category x region -- the allocated grain."
+        data_tests:
+          - unique
+          - not_null
+
+      - name: spend_key
+        description: "The source cell this row was allocated from. Four rows share each value."
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_marketing_spend')
+                field: spend_key
+
+      - name: spend_date
+        data_tests: [not_null]
+
+      - name: channel
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Web', 'Mobile App', 'Marketplace']
+
+      - name: category
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Electronics', 'Apparel', 'Home & Garden', 'Sports', 'Beauty']
+
+      - name: region
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['North', 'East', 'South', 'West']
+
+      - name: source_spend_usd
+        description: "The un-split total this row came from, carried through so reconciliation is checkable in one table."
+        data_tests: [not_null]
+
+      - name: region_share
+        description: "This region's fraction of the cell. The four shares sum to exactly 1."
+        data_tests: [not_null]
+
+      - name: allocation_basis
+        description: >
+          Which rule produced this row. 'trailing_28d_revenue_share' for all but the first day
+          of the series, which has no prior revenue and falls back to 'even_split_no_history'.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['trailing_28d_revenue_share', 'even_split_no_history']
+
+      - name: spend_allocated_usd
+        data_tests: [not_null]
+      - name: impressions_allocated
+        data_tests: [not_null]
+      - name: clicks_allocated
+        data_tests: [not_null]
+      - name: carries_rounding_residue
+        description: "True on the one region per cell that absorbs the sub-cent rounding difference."
+        data_tests: [not_null]
+
+  - name: int_category_cost_basis
+    description: >
+      The product dimension rolled up to category grain so a category-grain fact can join it
+      without fanning out. Averages unit_cost over margin-calculable SKUs only and carries the
+      count and IDs of the SKUs it excluded. 5 rows.
+    columns:
+      - name: category
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_product')
+                field: category
+      - name: skus_in_category
+        data_tests: [not_null]
+      - name: skus_with_unit_cost
+        data_tests: [not_null]
+      - name: skus_excluded_from_cost_basis
+        description: "How many SKUs in this category have no unit_cost and are therefore not in the average."
+        data_tests: [not_null]
+      - name: avg_unit_cost
+        description: "Average over costed SKUs only. Never imputed onto the uncosted ones."
+        data_tests: [not_null]
+      - name: cost_basis_coverage_pct
+        data_tests: [not_null]
+      - name: is_margin_estimable
+        data_tests: [not_null]
+      - name: is_fully_costed
+        data_tests: [not_null]
