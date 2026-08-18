@@ -2,6 +2,9 @@
 # Exists so the synthetic-data step reproduces from a clean clone with `pip install -r`.
 # faker/holidays fabricate realistic values, pandas shapes them, sqlalchemy+psycopg2 load
 # them into the Postgres `raw` schema, python-dotenv supplies credentials.
+# scipy supplies the t-distribution used by the Day 5 detector's hypothesis test; the
+# baseline has only ~8 same-weekday observations, so a normal approximation understates
+# the tails badly (p=0.0027 vs 0.0199 at |z|=3) and would inflate false positives.
 # dbt is deliberately NOT here — it needs Python 3.13; see requirements-dbt.txt.
 
 faker
@@ -10,3 +13,4 @@ sqlalchemy
 psycopg2-binary
 python-dotenv
 holidays
+scipy
