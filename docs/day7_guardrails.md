@@ -208,7 +208,7 @@ Three reasons, in increasing order of how much they matter:
 | 2 | Exactly one statement | `MULTI_STATEMENT` |
 | 3 | Root node is `exp.Select` | `NOT_A_SELECT`, `UNSUPPORTED_STATEMENT` |
 | 4 | No `INTO`, no locking clause, no nested write node | `SELECT_INTO`, `ROW_LOCK`, `NESTED_WRITE` |
-| 5 | No denied function anywhere in the tree | `DENIED_FUNCTION` |
+| 5 | Every function in the tree is on the function allowlist | `FUNCTION_NOT_ALLOWED`, `DENIED_FUNCTION` |
 | 6 | Every table reference schema-qualified and on the allowlist | `TABLE_NOT_ALLOWED`, `CROSS_DATABASE`, `NO_TABLE` |
 | 7 | `LIMIT` injected or clamped to 1,000 | — (rewrite, not a refusal) |
 
