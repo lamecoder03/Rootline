@@ -153,6 +153,19 @@ def extract_claims(brief, provider=None):
 def grade(scenario, brief, provider=None):
     """Mechanical comparison against the key. Every check is a boolean with a stated reason, so
     a failing scenario says which requirement it missed rather than just scoring low."""
+    # An empty or stub brief is a failure to produce output, NOT a claim of "no cause found".
+    # The first eval run graded a zero-byte brief as `none_identifiable`, which is a verdict
+    # invented by the defaulting logic rather than read from a document. Caught before the
+    # extractor runs, so it also costs no quota.
+    body = (brief or "").strip()
+    if len(body) < 200 or body.startswith("**No brief was produced."):
+        return Grade(
+            anomaly_key=scenario.anomaly_key, label=scenario.label,
+            expected_cause=scenario.expected_cause, claimed_cause="none_produced",
+            cause_correct=False, checks={"produced a brief at all": False}, passed=False,
+            extraction={}, failure_notes=["no brief was produced - nothing to grade"],
+        )
+
     claims = extract_claims(brief, provider=provider)
     claimed = claims["primary_cause"]
     accepted = {scenario.expected_cause, *scenario.acceptable_alternatives}

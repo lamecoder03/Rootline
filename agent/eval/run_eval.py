@@ -21,6 +21,20 @@ from .grader import grade
 RESULTS_PATH = os.path.join(REPO_ROOT, "docs", "sample_briefs", "eval_results.json")
 
 
+def save(previous, results):
+    """Writes after every scenario, not at the end. A sweep costs more than one day's free quota,
+    so it can die mid-run on a rate limit - and an end-of-run write would throw away every brief
+    already scored. Ordered by the answer key so the file reads the same however it was filled."""
+    merged = dict(previous)
+    merged.update({r["anomaly_key"]: r for r in results})
+    ordered = [merged[s.anomaly_key] for s in answer_key.all_scenarios()
+               if s.anomaly_key in merged]
+    os.makedirs(os.path.dirname(RESULTS_PATH), exist_ok=True)
+    with open(RESULTS_PATH, "w", encoding="utf-8", newline="\n") as handle:
+        json.dump(ordered, handle, indent=2)
+    return ordered
+
+
 def load_previous():
     """Results accumulate across runs instead of being overwritten. Not a convenience: the free
     tier's 200,000-token DAILY cap is smaller than one full ten-scenario sweep, so the eval has
@@ -81,9 +95,18 @@ def main():
             continue
 
         print(f"=== {scenario.anomaly_key}  {scenario.label}")
-        investigation = investigate(anomaly, provider=provider)
-        path = save_brief(investigation, anomaly, subdir="eval")
-        verdict = grade(scenario, investigation.brief, provider=provider)
+        try:
+            investigation = investigate(anomaly, provider=provider)
+            path = save_brief(investigation, anomaly, subdir="eval")
+            verdict = grade(scenario, investigation.brief, provider=provider)
+        except Exception as error:
+            # A daily-quota exhaustion mid-sweep is expected on the free tier and must not look
+            # like a scored failure. Stop cleanly, keep what completed, and name the reason.
+            print(f"  !! {scenario.anomaly_key} could not be completed: "
+                  f"{type(error).__name__}: {str(error)[:220]}")
+            print(f"  Stopping. {len(results)} scenario(s) scored this run and already saved; "
+                  f"re-run with --only to continue.\n")
+            break
 
         mark = "PASS" if verdict.passed else "FAIL"
         print(f"  {mark}  concluded '{verdict.claimed_cause}' (expected "
@@ -114,6 +137,7 @@ def main():
             "investigation_id": investigation.investigation_id,
             "provider": investigation.provider,
         })
+        save(previous, results)
 
     passed = sum(1 for r in results if r["passed"])
     cause_right = sum(1 for r in results if r["claimed_cause"] in
@@ -130,14 +154,7 @@ def main():
               f"{sorted(calls)[len(calls)//2]} / {max(calls)}  (ceiling {cfg.MAX_TOOL_CALLS})")
     print("=" * 78)
 
-    merged = dict(previous)
-    merged.update({r["anomaly_key"]: r for r in results})
-    ordered = [merged[s.anomaly_key] for s in answer_key.all_scenarios()
-               if s.anomaly_key in merged]
-
-    os.makedirs(os.path.dirname(RESULTS_PATH), exist_ok=True)
-    with open(RESULTS_PATH, "w", encoding="utf-8", newline="\n") as handle:
-        json.dump(ordered, handle, indent=2)
+    ordered = save(previous, results)
     print(f"\nResults: {os.path.relpath(RESULTS_PATH, REPO_ROOT)}  "
           f"({len(ordered)} of {len(answer_key.all_scenarios())} scenarios scored in total)")
     return 0 if passed == len(results) else 1

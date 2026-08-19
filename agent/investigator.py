@@ -101,6 +101,30 @@ def investigate(anomaly, provider=None, max_calls=None, verbose=True):
         usage["out"] += reply.output_tokens
         return reply
 
+    def write_brief(nudge):
+        """The closing turn, with tools removed so the whole allowance goes to prose.
+
+        Retries once if it comes back empty. That is not defensive padding: gpt-oss spends output
+        budget on reasoning before emitting text, and the first eval run shipped a brief file
+        containing nothing at all while still being graded - a scored verdict resting on an empty
+        document is worse than a recorded failure, so an unrecoverable one is now labelled.
+        """
+        turns.append(UserTurn(nudge))
+        reply = ask(with_tools=False)
+        if not (reply.text or "").strip():
+            if verbose:
+                print("    [output] closing turn produced no text - retrying once")
+            turns.append(UserTurn(prompts.OUTPUT_TRUNCATED_NUDGE))
+            reply = ask(with_tools=False)
+        if not (reply.text or "").strip():
+            reply.text = (
+                "**No brief was produced.** The model exhausted its output allowance on "
+                "reasoning tokens twice without emitting a written brief. The evidence trail "
+                "below is real and was gathered, but no analysis of it exists. This is a "
+                "recorded failure, not a finding of 'no cause'."
+            )
+        return reply
+
     def finish(reply, stop):
         return Investigation(
             anomaly_key=anomaly["anomaly_key"], investigation_id=investigation_id,
@@ -124,8 +148,7 @@ def investigate(anomaly, provider=None, max_calls=None, verbose=True):
             if verbose:
                 print("    [output] turn hit the token cap before writing - retrying "
                       "without tools so the whole allowance goes to the brief")
-            turns.append(UserTurn(prompts.OUTPUT_TRUNCATED_NUDGE))
-            return finish(ask(with_tools=False), "length_retry")
+            return finish(write_brief(prompts.OUTPUT_TRUNCATED_NUDGE), "length_retry")
 
         if reply.stop != "tool_calls" or not reply.tool_calls:
             return finish(reply, reply.stop)
@@ -154,8 +177,11 @@ def investigate(anomaly, provider=None, max_calls=None, verbose=True):
                 elif tool.calls:
                     last = tool.calls[-1]
                     mark = "ok " if last["outcome"] == "pass" else "REJ"
+                    # A DATABASE error leaves both row_count and rejection_code null - the query
+                    # passed the validator and then failed in Postgres, which is a third outcome
+                    # the two-branch version did not have a label for, and it crashed the sweep.
                     detail = (f"{last['row_count']} rows" if last["row_count"] is not None
-                              else last["rejection_code"])
+                              else last["rejection_code"] or last["outcome"].upper())
                     print(f"    [{last['index']:>2}/{budget.max_calls}] {mark} {detail:<14} "
                           f"{(last['purpose'] or '')[:60]}")
 
@@ -164,5 +190,4 @@ def investigate(anomaly, provider=None, max_calls=None, verbose=True):
         if truncated:
             # Final turn with the tool removed, so the model cannot ask for anything else and has
             # to write from what it has. This is the graceful part of graceful degradation.
-            turns.append(UserTurn(prompts.BUDGET_EXHAUSTED_NUDGE))
-            return finish(ask(with_tools=False), "budget_exceeded")
+            return finish(write_brief(prompts.BUDGET_EXHAUSTED_NUDGE), "budget_exceeded")
