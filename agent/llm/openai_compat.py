@@ -99,24 +99,33 @@ class OpenAICompatProvider(LLMProvider):
                     })
         return messages
 
+    # "try again in 12.5s", "try again in 23m49.92s", "try again in 1h3m2s". The earlier pattern
+    # only understood the bare-seconds form, so every DAILY-quota advisory - which is always
+    # given in minutes - failed to parse and silently fell through to exponential backoff. The
+    # 240-second waits that looked like honoured advice were guesses against a 24-minute wall.
+    _WAIT = re.compile(
+        r"try again in (?:([0-9.]+)h)?(?:([0-9.]+)m)?(?:([0-9.]+)s)?", re.IGNORECASE)
+
+    # Long enough to sit out a daily-quota advisory in ONE sleep. The free tier's 200,000/day is
+    # a rolling 24-hour window, not a midnight reset, so tokens return at roughly 139/minute and
+    # a stalled request genuinely has to wait tens of minutes. Sleeping the advised time once is
+    # honest; six short sleeps that each fail is a livelock wearing a progress bar.
+    MAX_BACKOFF = 1_800.0
+
     def _sleep_for(self, error, attempt):
-        """Groq's free tier meters tokens per minute and returns the wait in the message body.
-        Honouring the number it gives beats a blind exponential backoff, which either wastes a
-        minute or retries too early and burns another quota slot."""
-        text = str(error)
-        match = re.search(r"try again in ([0-9.]+)s", text)
-        if match:
-            return min(float(match.group(1)) + 1.0, 240.0)
-        retry_after = getattr(getattr(error, "response", None), "headers", {}) or {}
-        if retry_after.get("retry-after"):
+        """How long the provider says to wait, honoured as given. Guessing is the fallback, not
+        the plan: the server knows when the bucket refills and says so in the message body."""
+        match = self._WAIT.search(str(error))
+        if match and any(match.groups()):
+            hours, minutes, seconds = (float(g) if g else 0.0 for g in match.groups())
+            return min(hours * 3600 + minutes * 60 + seconds + 1.0, self.MAX_BACKOFF)
+        headers = getattr(getattr(error, "response", None), "headers", {}) or {}
+        if headers.get("retry-after"):
             try:
-                return min(float(retry_after["retry-after"]) + 1.0, 240.0)
+                return min(float(headers["retry-after"]) + 1.0, self.MAX_BACKOFF)
             except ValueError:
                 pass
-        # Capped well above the old 65s: a request costing most of the window sometimes needs
-        # far longer than one window to clear, and under-sleeping is what turns a pause into a
-        # livelock. With the pacer in front this path should now be rare.
-        return min(2 ** attempt + random.uniform(0, 5), 240.0)
+        return min(2 ** attempt + random.uniform(0, 5), self.MAX_BACKOFF)
 
     def chat(self, system, turns, tools=None, max_tokens=4096, require_tool=None):
         request = {
@@ -176,7 +185,8 @@ class OpenAICompatProvider(LLMProvider):
                     raise
                 delay = self._sleep_for(error, attempt)
                 if self.verbose_retries:
-                    print(f"      [rate limit] waiting {delay:.0f}s "
+                    scope = "DAILY quota" if "(TPD)" in str(error) else "per-minute quota"
+                    print(f"      [rate limit] {scope} exhausted - waiting {delay / 60:.1f} min "
                           f"(attempt {attempt + 1}/{self.max_retries})")
                 time.sleep(delay)
 

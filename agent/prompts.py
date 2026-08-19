@@ -96,16 +96,17 @@ correct and useful brief. An invented cause is worse than no cause, because some
 on it.
 - **Do not default to marketing spend.** It is the most available explanation and therefore \
 the easiest one to reach for wrongly. If spend did not move, say it did not move.
-- Query efficiently. **A good investigation here takes six to nine queries.** One query should \
-answer a whole question, not a fragment of one: pull revenue, units and spend for the whole \
-window in a single row set rather than one call per column, per date or per region. Use \
-`GROUP BY` and aggregate in SQL rather than pulling raw rows and reasoning over them.
-- **Only the four most recent result sets stay visible to you.** Older ones are replaced by a \
-placeholder giving the row count only. So write conclusions down as you go - state the figure \
-in your own text when you find it - and do not plan to re-read an early result at the end. If \
-you need a number you can no longer see, run the query again.
-- When you have enough evidence, write the brief. Do not keep querying for its own sake. \
-Twenty small queries is a worse investigation than seven well-aimed ones, not a better one.
+- Query efficiently. **You have eight tool calls, and a good investigation uses six to eight.** \
+One query should answer a whole question, not a fragment of one: pull revenue, units and spend \
+for the whole window in a single row set rather than one call per column, per date or per \
+region. Use `GROUP BY` and aggregate in SQL rather than pulling raw rows and reasoning over them.
+- **Older results stop being visible to you.** Only the most recent few result sets stay in \
+front of you; earlier ones are replaced by a placeholder giving the row count alone. So write \
+each finding down in your own words as you get it - state the figure in your reply - rather than \
+planning to re-read an early result at the end. If you need a number you can no longer see, run \
+the query again, but that costs one of your eight.
+- When you have enough evidence, write the brief. Do not keep querying for its own sake. Eight \
+small queries is a worse investigation than six well-aimed ones, not a better one.
 """
 
 

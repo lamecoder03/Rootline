@@ -116,15 +116,37 @@ REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "medium")
 #   9  peer cells outside the slice              specificity: did only this slice move?
 #  10  one follow-up on whichever of 5-9 fired
 #
-# Ten productive calls. Models do not walk a checklist cleanly - they re-query after an empty
-# result, narrow a window, or fix a rejected query - so the observed-to-minimum ratio is
-# comfortably above one. Doubling gives 20, which is the ceiling set here. A smaller model
-# rewrites rejected queries more often, which spends budget without gathering evidence, so the
-# eval reports rejected calls separately from productive ones.
+# Ten productive calls, several of which combine (revenue, units and spend come back from one
+# query, not three). The first ceiling set here was 20 - that ten, doubled, on the reasoning that
+# models re-query after an empty result and the observed-to-minimum ratio must exceed one.
 #
-# 20 is a hypothesis, not a measurement. docs/day8_agent_eval.md reports the tool calls each
-# eval investigation actually used, and whether any hit the ceiling.
-MAX_TOOL_CALLS = 20
+# THAT WAS A HYPOTHESIS, AND THE MEASUREMENT CONTRADICTED IT. Lowered to 8 on the evidence below.
+#
+# What was measured (DET-0008, gpt-oss-20b, ceiling 20, investigation INV-DET-0008-1f183d):
+# all 20 calls were spent, and calls 13-20 re-queried tables already read at calls 1-9 -
+# detected_anomaly_points four separate times, marketing spend for the same March 7-21 window
+# three times. The investigation then produced NO brief at all.
+#
+# The mechanism is not impatience, it is the context window. A request must fit
+# fixed overhead + conversation + max_tokens <= 8,000 tokens, so agent/context_budget.py elides
+# the oldest results once roughly the eighth accumulates. Past that point every new call pushes
+# an earlier result out of view, the model notices a figure it needs is gone, and spends the next
+# call re-fetching it - which evicts another. The marginal call beyond ~8 destroys more evidence
+# than it adds, and the loop is self-sustaining.
+#
+# So 8 is where the evidence budget and the context budget agree: it is both what the ten-item
+# checklist actually needs once queries are combined, and the most results that can stay
+# simultaneously visible. A ceiling above the window is not a bigger allowance, it is a churn
+# generator.
+#
+# Cost is a consequence of this, not the reason for it. Because every call re-sends the whole
+# conversation, spend is quadratic in calls: 20 calls measured ~152,000 tokens, 8 costs ~40,000.
+# That the change also makes the eval affordable on a free tier is a welcome side effect of
+# fixing a reasoning defect, and would not on its own justify degrading the agent.
+#
+# Still reported per investigation in docs/day8_agent_eval.md: calls used, calls rejected, and
+# how many result sets had to be elided - so this number stays a measurement, not a belief.
+MAX_TOOL_CALLS = 8
 
 # Where briefs land. One markdown file per investigation, kept in git, because the brief is the
 # deliverable this whole project exists to produce - a log line is not an artifact.
