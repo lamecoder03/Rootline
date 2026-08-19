@@ -220,10 +220,51 @@ parses as an `exp.Select` and takes row locks. Both would pass a check that only
 statement type.
 
 **Check 5 — some queries reference no table at all.** `SELECT pg_read_file('/etc/passwd')` has
-nothing for the allowlist to inspect. The denylist is matched against AST function nodes, not
-against the query text. This one is genuinely belt-and-braces: `pg_read_file` needs privileges the
-agent role does not have, so the database would refuse it too — the validator just refuses it
-earlier and logs a cleaner reason.
+nothing for the table allowlist to inspect, so functions get their own allowlist, matched against
+AST function nodes rather than query text.
+
+This started as a *denylist* — about 18 known-dangerous names — and that was wrong. It was the
+one asymmetry in a design that is otherwise allowlists all the way down, and it meant any function
+nobody thought to name was permitted by default. I originally documented it as harmless
+belt-and-braces on the grounds that the read-only role would catch whatever slipped through.
+**That was not true, and testing it showed so.** Six functions passed the validator *and*
+succeeded against the read-only role:
+
+| Function (was not on the denylist) | Validator | Read-only role | Effect |
+|---|---|---|---|
+| `pg_get_viewdef(...::regclass)` | passed | **allowed** | Returned the stockout view's body — `WITH inventory AS (SELECT stg_inv...` — leaking the names of `staging` tables the agent cannot query |
+| `txid_current()` | passed | **allowed** | Assigned a transaction id and forced a WAL write from a "read-only" role |
+| `repeat(md5(sku_id), 2000000)` | passed | **allowed** | Materialised 64,000,000 bytes in one row |
+| `current_setting('listen_addresses')` | passed | **allowed** | Returned `*` |
+| `version()`, `pg_backend_pid()` | passed | **allowed** | Server and process fingerprinting |
+
+Note what each of those defeats. `pg_get_viewdef` takes its argument as a *string cast to
+regclass*, so there is no table node for the table allowlist to see, and it requires no privilege
+on the view, so the grant does not apply either — both walls missed it. `repeat()` is not bounded
+by the 1,000-row cap (the cap multiplies it) and not caught by `statement_timeout` (the query is
+fast, not slow).
+
+**It is now an allowlist**, `ALLOWED_FUNCTIONS` in `agent/guardrails/config.py` — roughly 70 names
+covering aggregates, maths, null handling, dates, strings and window functions. Anything else is
+`FUNCTION_NOT_ALLOWED`. Amplifiers (`repeat`, `lpad`/`rpad`, `generate_series`) and regex functions
+are excluded deliberately and the reason is written next to the exclusion, rather than left to be
+inferred from absence. `DENIED_FUNCTIONS` survives for one purpose only: a known-dangerous name
+still reports `pg_read_file() is not permitted` rather than the generic message, which reads better
+in the audit trail.
+
+**The names in that list are sqlglot's, not Postgres's**, and this is the trap worth knowing.
+sqlglot normalises many functions onto internal nodes: `to_char` parses as `TimeToStr`,
+`date_trunc` as `TimestampTrunc`, `string_agg` as `GroupConcat`. Listing the Postgres spelling
+would have silently failed to permit the function. Every entry was read off a real parse tree.
+`Cast` and `Case` are also `Func` subclasses in sqlglot but are SQL syntax rather than callable
+functions, so they are exempted by node type — otherwise every `gross_revenue::numeric` would be
+refused.
+
+The residual risk is now inverted, which is the right direction to fail: instead of unknown
+*dangerous* functions passing, unknown *useful* ones get refused. Mitigated by a regression suite
+of 18 realistic analyst queries in `tests/test_guardrails.py` plus 5 that run against the live
+warehouse in the attack harness, and by a refusal message that names the offending function so
+the fix is one reviewed line.
 
 **Check 6 — CTE names look exactly like table names.** `WITH leak AS (SELECT * FROM
 raw.marketing_spend) SELECT * FROM leak` produces *two* table nodes in the tree: `raw.marketing_spend`
@@ -321,11 +362,11 @@ short — a truncated investigation that does not say so is worse than none.
 
 Harness: `python -m tests.attack_attempts`. Full transcript at the end of this document.
 
-**Headline: 67 attempts, 54 blocked as expected, 16 legitimate reads allowed, 0 unexpected
-outcomes, and 67 of 67 attempts reconciled against rows in the audit log.**
+**Headline: 83 attempts, 62 blocked as expected, 21 legitimate reads allowed, 0 unexpected
+outcomes, and 80 of 80 agent-identity attempts reconciled against rows in the audit log.**
 
 Those are two different populations and the harness now says so rather than leaving the
-arithmetic to the reader: **70 outcomes = 67 agent-identity attempts + 3 owner-identity trigger
+arithmetic to the reader: **83 outcomes = 80 agent-identity attempts + 3 owner-identity trigger
 tests**. The three owner-side attempts in 5.4 are performed as `revenue_ops`, so they correctly
 cannot appear in a log written over the agent's connection. Only the 67 have to reconcile, and
 the harness asserts that split rather than printing one merged total.
@@ -464,28 +505,29 @@ record rather than looking like an investigation that simply ended.
 ```
   Two populations, and they are deliberately different sizes:
 
-    Outcomes printed above           : 70
-      agent-identity attempts        :  67  <- each MUST leave an audit row
+    Outcomes printed above           : 83
+      agent-identity attempts        :  80  <- each MUST leave an audit row
       owner-identity trigger tests   :   3  <- each MUST NOT: the log is written over the
                                             agent's connection, and revenue_ops is not
                                             the audited identity
-    Audit rows for ATTACK-c8120893  : 67
-    Reconciles                       : YES (67 audited attempts == 67 rows)
+    Audit rows for ATTACK-99c6b275  : 80
+    Reconciles                       : YES (80 audited attempts == 80 rows)
 
   By recorded outcome:
     budget_exceeded      3
     error               28
-    pass                16
-    reject              20
+    pass                21
+    reject              28
 
-  Blocked attempts that left a row : 51
-  Successful reads that left a row : 16
+  Blocked attempts that left a row : 59
+  Successful reads that left a row : 21
   Author of every row (db_role)    : ['revenue_agent']
 ------------------------------------------------------------------------------------------------
-  Attempts blocked as expected :  54  (51 audited + 3 owner-side)
-  Attempts allowed as expected :  16
+  Attempts blocked as expected :  62  (59 audited + 3 owner-side)
+  Attempts allowed as expected :  21
   UNEXPECTED outcomes          :   0
-  Audit trail reconciles       : True (67 of 67)
+  Audit trail reconciles       : True (80 of 80)
+------------------------------------------------------------------------------------------------
 ```
 
 The `70 = 67 + 3` split is asserted, not just printed: if the two counters ever disagree the
@@ -574,7 +616,7 @@ is not a dependency of this project and CI is explicitly deferred in the locked 
 
 ```
 ================================================================================================
-DAY 7 GUARDRAIL ATTACK HARNESS   investigation_id = ATTACK-3e9af2aa
+DAY 7 GUARDRAIL ATTACK HARNESS   investigation_id = ATTACK-99c6b275
 Agent connects as 'revenue_agent'; the owner is 'revenue_ops'.
 ================================================================================================
 
@@ -681,6 +723,22 @@ SECTION 3 - Attacks through the SQL validator (they never reach the database)
     BLOCKED  DENIED_FUNCTION       Function pg_read_file() is not permitted.
   [sleep via function] SELECT pg_sleep(300) FROM analytics.dim_product
     BLOCKED  DENIED_FUNCTION       Function pg_sleep() is not permitted.
+  [view-definition leak (reached the DB before the allowlist)] SELECT pg_get_viewdef('analytics.fct_daily_stockout'::regclass) FROM analyti
+    BLOCKED  FUNCTION_NOT_ALLOWED  Function pg_get_viewdef() is not on the allowlist. Permitted fun
+  [WAL write from a read-only role (reached the DB before)] SELECT txid_current() FROM analytics.dim_product
+    BLOCKED  FUNCTION_NOT_ALLOWED  Function txid_current() is not on the allowlist. Permitted funct
+  [64MB-per-row memory amplification (reached the DB before)] SELECT length(repeat(md5(sku_id), 2000000)) FROM analytics.dim_product
+    BLOCKED  FUNCTION_NOT_ALLOWED  Function repeat() is not on the allowlist. Permitted functions c
+  [row amplification] SELECT * FROM generate_series(1, 1000000000)
+    BLOCKED  FUNCTION_NOT_ALLOWED  Function exploding_generate_series() is not on the allowlist. Pe
+  [server config read (reached the DB before)] SELECT current_setting('listen_addresses') FROM analytics.dim_product
+    BLOCKED  FUNCTION_NOT_ALLOWED  Function current_setting() is not on the allowlist. Permitted fu
+  [server fingerprint (reached the DB before)] SELECT version(), pg_backend_pid() FROM analytics.dim_product
+    BLOCKED  FUNCTION_NOT_ALLOWED  Function current_version() is not on the allowlist. Permitted fu
+  [privilege-matrix enumeration] SELECT has_table_privilege('raw.daily_revenue', 'SELECT') FROM analytics.dim
+    BLOCKED  FUNCTION_NOT_ALLOWED  Function has_table_privilege() is not on the allowlist. Permitte
+  [regex denial of service] SELECT regexp_replace(sku_id, '(a+)+b', 'x') FROM analytics.dim_product
+    BLOCKED  FUNCTION_NOT_ALLOWED  Function regexp_replace() is not on the allowlist. Permitted fun
   [catalog probe] SELECT * FROM pg_catalog.pg_authid
     BLOCKED  TABLE_NOT_ALLOWED     Table 'pg_catalog.pg_authid' is not on the allowlist. Allowed: a
   [non-SELECT command] EXPLAIN ANALYZE SELECT * FROM analytics.dim_product
@@ -706,6 +764,21 @@ SECTION 3 - Attacks through the SQL validator (they never reach the database)
   [LIMIT 999999 - cap must be clamped down]
       SELECT * FROM analytics.fct_daily_revenue LIMIT 999999
     ALLOWED  executed, 1,000 rows [LIMIT clamped down to the 1000-row ceiling.]
+  [aggregates, date bucketing and a null-guarded ratio]
+      SELECT date_trunc('week', order_date) AS wk, sum(gross_revenue) / nullif(sum(units), 0) 
+    ALLOWED  executed, 10 rows
+  [window function over the fact]
+      SELECT order_date, gross_revenue, lag(gross_revenue) OVER (ORDER BY order_date) AS prev 
+    ALLOWED  executed, 10 rows
+  [dispersion stats and a median on detector output]
+      SELECT stddev(z_score), corr(z_score, delta_pct), percentile_cont(0.5) WITHIN GROUP (ORD
+    ALLOWED  executed, 1 rows [LIMIT 1000 injected (query had none).]
+  [string handling, casts and a CASE expression]
+      SELECT split_part(cell_key, '|', 1) AS cat, CASE WHEN peak_delta_pct < 0 THEN 'drop' ELS
+    ALLOWED  executed, 10 rows
+  [coalesce over the deliberately-null supplier column]
+      SELECT coalesce(supplier, 'unknown') AS s, count(*) FROM analytics.dim_product GROUP BY 
+    ALLOWED  executed, 112 rows [LIMIT 1000 injected (query had none).]
 
 ================================================================================================
 SECTION 4 - Tampering with the audit trail itself
@@ -721,7 +794,8 @@ SECTION 4 - Tampering with the audit trail itself
   SELECT * FROM audit.agent_tool_calls
     BLOCKED  permission denied for table agent_tool_calls
 
-  And as the OWNER, whom the grants do not restrain - the trigger must:
+  And as the OWNER, whom the grants do not restrain - the trigger must.
+  These three run as revenue_ops, so they are NOT written to the agent's audit log.
   [as owner] DELETE FROM audit.agent_tool_calls
     BLOCKED  audit.agent_tool_calls is append-only; DELETE is refused
   [as owner] UPDATE audit.agent_tool_calls SET row_count = 0
@@ -758,25 +832,31 @@ SECTION 5 - Tool-call ceiling: does it abort, or merely count?
 ================================================================================================
 SECTION 6 - Audit reconciliation: did every attempt leave a row?
 ================================================================================================
-  Attempts made by this harness : 67
-  Audit rows found for ATTACK-3e9af2aa : 67
-  Reconciles: YES
+  Two populations, and they are deliberately different sizes:
+
+    Outcomes printed above           : 83
+      agent-identity attempts        :  80  <- each MUST leave an audit row
+      owner-identity trigger tests   :   3  <- each MUST NOT: the log is written over the
+                                            agent's connection, and revenue_ops is not
+                                            the audited identity
+    Audit rows for ATTACK-99c6b275  : 80
+    Reconciles                       : YES (80 audited attempts == 80 rows)
 
   By recorded outcome:
     budget_exceeded      3
     error               28
-    pass                16
-    reject              20
+    pass                21
+    reject              28
 
-  Blocked attempts that left a row : 51
-  Successful reads that left a row : 16
+  Blocked attempts that left a row : 59
+  Successful reads that left a row : 21
   Author of every row (db_role)    : ['revenue_agent']
 ------------------------------------------------------------------------------------------------
-  Attempts blocked as expected : 54
-  Attempts allowed as expected : 16
-  UNEXPECTED outcomes          : 0
-  Audit trail reconciles       : True
+  Attempts blocked as expected :  62  (59 audited + 3 owner-side)
+  Attempts allowed as expected :  21
+  UNEXPECTED outcomes          :   0
+  Audit trail reconciles       : True (80 of 80)
 ------------------------------------------------------------------------------------------------
 
-Full trail:  SELECT * FROM audit.agent_tool_calls WHERE investigation_id = 'ATTACK-3e9af2aa' ORDER BY audit_id;
+Full trail:  SELECT * FROM audit.agent_tool_calls WHERE investigation_id = 'ATTACK-99c6b275' ORDER BY audit_id;
 ```

@@ -209,6 +209,23 @@ def section_validator(agent_engine, audit, budget):
         ("read that takes locks", "SELECT * FROM analytics.dim_product FOR UPDATE"),
         ("file read via function", "SELECT pg_read_file('/etc/passwd')"),
         ("sleep via function", "SELECT pg_sleep(300) FROM analytics.dim_product"),
+        # The six a function DENYLIST let through. Each was measured reaching the database and
+        # succeeding as revenue_agent before the allowlist replaced it - see docs/day7_guardrails.md.
+        ("view-definition leak (reached the DB before the allowlist)",
+         "SELECT pg_get_viewdef('analytics.fct_daily_stockout'::regclass) FROM analytics.dim_product"),
+        ("WAL write from a read-only role (reached the DB before)",
+         "SELECT txid_current() FROM analytics.dim_product"),
+        ("64MB-per-row memory amplification (reached the DB before)",
+         "SELECT length(repeat(md5(sku_id), 2000000)) FROM analytics.dim_product"),
+        ("row amplification", "SELECT * FROM generate_series(1, 1000000000)"),
+        ("server config read (reached the DB before)",
+         "SELECT current_setting('listen_addresses') FROM analytics.dim_product"),
+        ("server fingerprint (reached the DB before)",
+         "SELECT version(), pg_backend_pid() FROM analytics.dim_product"),
+        ("privilege-matrix enumeration",
+         "SELECT has_table_privilege('raw.daily_revenue', 'SELECT') FROM analytics.dim_product"),
+        ("regex denial of service",
+         "SELECT regexp_replace(sku_id, '(a+)+b', 'x') FROM analytics.dim_product"),
         ("catalog probe", "SELECT * FROM pg_catalog.pg_authid"),
         ("non-SELECT command", "EXPLAIN ANALYZE SELECT * FROM analytics.dim_product"),
         ("UNION onto a forbidden table",
@@ -236,6 +253,28 @@ def section_validator(agent_engine, audit, budget):
          "SELECT * FROM analytics.fct_daily_revenue"),
         ("LIMIT 999999 - cap must be clamped down",
          "SELECT * FROM analytics.fct_daily_revenue LIMIT 999999"),
+        # The function allowlist's regression set: an over-tight list fails silently at Day 8
+        # rather than loudly here. These run against the real warehouse, so they prove the
+        # permitted functions actually execute, not merely that they parse.
+        ("aggregates, date bucketing and a null-guarded ratio",
+         "SELECT date_trunc('week', order_date) AS wk, "
+         "sum(gross_revenue) / nullif(sum(units), 0) AS aov "
+         "FROM analytics.fct_daily_revenue GROUP BY 1 ORDER BY 1 LIMIT 10"),
+        ("window function over the fact",
+         "SELECT order_date, gross_revenue, "
+         "lag(gross_revenue) OVER (ORDER BY order_date) AS prev "
+         "FROM analytics.fct_daily_revenue WHERE category = 'Electronics' LIMIT 10"),
+        ("dispersion stats and a median on detector output",
+         "SELECT stddev(z_score), corr(z_score, delta_pct), "
+         "percentile_cont(0.5) WITHIN GROUP (ORDER BY z_score) "
+         "FROM analytics.detected_anomaly_points"),
+        ("string handling, casts and a CASE expression",
+         "SELECT split_part(cell_key, '|', 1) AS cat, "
+         "CASE WHEN peak_delta_pct < 0 THEN 'drop' ELSE 'spike' END AS direction, "
+         "round(abs(peak_z_score)::numeric, 2) AS z FROM analytics.detected_anomalies LIMIT 10"),
+        ("coalesce over the deliberately-null supplier column",
+         "SELECT coalesce(supplier, 'unknown') AS s, count(*) "
+         "FROM analytics.dim_product GROUP BY 1"),
     ]:
         print(f"  [{label}]")
         print(f"      {sql[:88]}")

@@ -35,11 +35,72 @@ SQL_DIALECT = "postgres"
 # unbounded result set is both a cost problem and a way to push the model past its context.
 MAX_ROWS = 1000
 
-# --- Function denylist ------------------------------------------------------------------
-# Matched against AST function nodes, not against the query text. These read files, open network
-# connections, execute nested SQL from a string, or burn wall-clock — none of which the table
-# allowlist can see, because none of them reference a table. The read-only role blocks them a
-# second time (they need privileges it does not have); this layer refuses them earlier.
+# --- Function allowlist -----------------------------------------------------------------
+# An ALLOWLIST, like tables and statement types. It replaced a denylist, which was the one
+# asymmetry in the design and let six functions through in testing — pg_get_viewdef leaked the
+# stockout view's body (naming staging tables the agent cannot query), txid_current forced a WAL
+# write from a "read-only" role, and repeat() materialised 64MB in a single row.
+#
+# NAMES ARE sqlglot's, NOT POSTGRES'S. sqlglot normalises many functions to an internal node, so
+# `to_char` parses as TimeToStr, `date_trunc` as TimestampTrunc and `string_agg` as GroupConcat.
+# Listing the Postgres spelling would silently fail to permit the function. Each entry below was
+# read off a real parse tree; the Postgres spelling is noted where the two differ.
+ALLOWED_FUNCTIONS = frozenset({
+    # Aggregates — the arithmetic an anomaly brief is made of.
+    "sum", "avg", "count", "min", "max",
+    "stddev", "stdev", "stddev_pop", "variance", "var_samp", "variance_samp",
+    "percentile_cont", "percentile_disc", "corr",
+    "array_agg", "group_concat",                    # group_concat <- string_agg
+
+    # Maths — deltas, ratios and magnitudes.
+    "abs", "ceil", "ceiling", "floor", "round", "greatest", "least",
+    "sqrt", "pow", "power", "ln", "log", "exp", "sign", "signum",
+
+    # Null and conditional handling — the 8 uncosted SKUs make this unavoidable.
+    "coalesce", "ifnull", "nvl", "nullif", "if", "iif",
+
+    # Dates — every fact is a daily time series.
+    "extract",                                      # extract <- also date_part
+    "timestamp_trunc",                              # timestamp_trunc <- date_trunc
+    "time_to_str",                                  # time_to_str <- to_char
+    "str_to_date",                                  # str_to_date <- to_date
+    "current_date", "current_timestamp", "age",     # current_timestamp <- now
+
+    # Strings — category, channel, region and cell_key are all text.
+    "lower", "lcase", "upper", "ucase", "initcap",
+    "trim", "btrim",                                # trim <- also ltrim / rtrim
+    "substring", "substr", "concat", "replace", "left", "right", "split_part",
+    "length", "char_length", "character_length", "len",
+    "str_position",                                 # str_position <- position / strpos
+    "md5",
+
+    # Window functions — trailing comparisons and ranking, which the detector's output invites.
+    "row_number", "rank", "dense_rank", "percent_rank", "cume_dist", "ntile",
+    "lag", "lead", "first_value", "last_value",
+})
+
+# Deliberately absent, and each for a reason rather than by oversight:
+#   repeat / pad (lpad, rpad)        - memory amplification. The 1,000-row cap multiplies this
+#                                      rather than containing it, and statement_timeout does not
+#                                      fire because the query is fast, not slow. Measured: 64MB
+#                                      in one row.
+#   exploding_generate_series        - row amplification; generate_series(1, 1e9).
+#   regexp_replace / regexp_* / like - catastrophic backtracking is a real denial of service, and
+#                                      the six marts hold conformed values that do not need regex.
+#   pg_get_viewdef, pg_get_functiondef - leak object definitions, which name schemas the agent is
+#                                      denied. No privilege is required to call them.
+#   txid_current                     - assigns a transaction id and writes WAL.
+#   current_setting, version, pg_backend_pid, inet_server_addr - server fingerprinting.
+# Widening this list is a reviewed edit to this file, which is the whole point of an allowlist.
+
+# Structural nodes sqlglot models as functions but which are SQL syntax, not callable functions.
+# Refusing them would refuse `gross_revenue::numeric(14,2)` and `CASE WHEN ... END`.
+STRUCTURAL_FUNCTION_NODES = ("Cast", "TryCast", "Case")
+
+# --- Function denylist (kept for the error message only) ---------------------------------
+# The allowlist above already refuses everything here. This set survives so a known-dangerous
+# call is reported as "pg_read_file() is not permitted" rather than the generic not-on-the-list
+# message, which matters when the reason lands in the audit trail and in front of the model.
 DENIED_FUNCTIONS = frozenset({
     "pg_read_file", "pg_read_binary_file", "pg_ls_dir", "pg_stat_file",
     "lo_import", "lo_export",

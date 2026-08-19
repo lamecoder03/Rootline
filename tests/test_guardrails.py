@@ -94,7 +94,9 @@ def test_select_into_and_locking_reads_are_refused():
 
 
 @case
-def test_denied_functions_are_refused():
+def test_known_dangerous_functions_keep_their_specific_message():
+    # These are on DENIED_FUNCTIONS as well as off the allowlist. The allowlist alone would
+    # refuse them; the denylist survives so the audit trail records which one it was.
     for sql in (
         "SELECT pg_read_file('/etc/passwd')",
         "SELECT pg_ls_dir('/')",
@@ -103,7 +105,76 @@ def test_denied_functions_are_refused():
         "SELECT query_to_xml('select * from raw.daily_revenue', true, false, '')",
     ):
         rejects(sql, "DENIED_FUNCTION")
-    assert validate("SELECT lower(category) FROM analytics.dim_product").sql
+
+
+@case
+def test_functions_are_an_allowlist_not_a_denylist():
+    """The six that a denylist let through, measured live against the read-only role before the
+    allowlist replaced it: pg_get_viewdef leaked the stockout view body (which names staging
+    tables), txid_current forced a WAL write, repeat() materialised 64MB in one row."""
+    for sql in (
+        "SELECT pg_get_viewdef('analytics.fct_daily_stockout'::regclass) FROM analytics.dim_product",
+        "SELECT txid_current() FROM analytics.dim_product",
+        "SELECT current_setting('listen_addresses') FROM analytics.dim_product",
+        "SELECT version() FROM analytics.dim_product",
+        "SELECT pg_backend_pid() FROM analytics.dim_product",
+        "SELECT has_table_privilege('raw.daily_revenue', 'SELECT') FROM analytics.dim_product",
+        "SELECT repeat(md5(sku_id), 2000000) FROM analytics.dim_product",
+        "SELECT lpad(sku_id, 1000000, 'a') FROM analytics.dim_product",
+        "SELECT regexp_replace(sku_id, '(a+)+b', 'x') FROM analytics.dim_product",
+        "SELECT pg_get_functiondef(1) FROM analytics.dim_product",
+        "SELECT inet_server_addr() FROM analytics.dim_product",
+    ):
+        rejects(sql, "FUNCTION_NOT_ALLOWED")
+
+
+@case
+def test_cast_and_case_are_syntax_not_functions():
+    # sqlglot models both as Func subclasses. Refusing them would refuse every money cast.
+    assert validate("SELECT round(gross_revenue::numeric, 2) FROM analytics.fct_daily_revenue").sql
+    assert validate(
+        "SELECT CASE WHEN delta_pct < 0 THEN 'drop' ELSE 'spike' END FROM analytics.detected_anomalies"
+    ).sql
+
+
+@case
+def test_legitimate_analyst_queries_still_pass():
+    """The regression set. An over-tight function allowlist fails silently at Day 8 rather than
+    loudly here, so every shape the agent is expected to write is asserted up front.
+    Note the sqlglot renames: to_char parses as TimeToStr, date_trunc as TimestampTrunc,
+    string_agg as GroupConcat - listing the Postgres spelling in config would not permit them."""
+    T = "analytics.fct_daily_revenue"
+    A = "analytics.detected_anomalies"
+    P = "analytics.detected_anomaly_points"
+    D = "analytics.dim_product"
+    for sql in (
+        f"SELECT category, sum(gross_revenue) FROM {T} GROUP BY 1",
+        f"SELECT date_trunc('week', order_date) AS wk, sum(gross_revenue) FROM {T} GROUP BY 1",
+        f"SELECT to_char(order_date, 'YYYY-MM') AS m, sum(gross_revenue) FROM {T} GROUP BY 1",
+        f"SELECT extract(dow FROM order_date) AS d, avg(gross_revenue) FROM {T} GROUP BY 1",
+        f"SELECT sum(gross_revenue) / nullif(sum(units), 0) AS aov FROM {T}",
+        f"SELECT category, count(*) FILTER (WHERE is_margin_calculable) FROM {D} GROUP BY 1",
+        f"SELECT coalesce(supplier, 'unknown') AS s, count(*) FROM {D} GROUP BY 1",
+        f"SELECT order_date, sum(gross_revenue) OVER (ORDER BY order_date "
+        f"ROWS BETWEEN 6 PRECEDING AND CURRENT ROW) FROM {T}",
+        f"SELECT cell_key, row_number() OVER (ORDER BY abs(peak_z_score) DESC) FROM {A}",
+        f"SELECT order_date, lag(gross_revenue) OVER (ORDER BY order_date) FROM {T}",
+        f"SELECT stddev(z_score), variance(z_score), corr(z_score, delta_pct) FROM {P}",
+        f"SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY z_score) FROM {P}",
+        f"SELECT split_part(cell_key, '|', 1) AS cat, count(*) FROM {A} GROUP BY 1",
+        f"SELECT lower(trim(category)), upper(channel), length(sku_id) FROM {D}",
+        f"SELECT greatest(z_score, 0), least(z_score, 0) FROM {P}",
+        f"SELECT category, string_agg(DISTINCT sku_id, ',') FROM {D} GROUP BY 1",
+        f"SELECT count(*) FROM {T} WHERE order_date > current_date - 30",
+        f"WITH w AS (SELECT cell_key FROM {A} ORDER BY abs(peak_z_score) DESC LIMIT 3) "
+        f"SELECT p.order_date, p.z_score FROM {P} p JOIN w ON p.cell_key = w.cell_key",
+    ):
+        try:
+            validate(sql)
+        except SqlValidationError as error:
+            raise AssertionError(
+                f"legitimate query refused as {error.code}: {error.message}\n  {sql}"
+            ) from error
 
 
 # --- The allowlist ----------------------------------------------------------------------

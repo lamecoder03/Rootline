@@ -110,14 +110,36 @@ def _reject_write_clauses(statement):
             _fail("NESTED_WRITE", f"A nested {label} was found inside the query and is refused.")
 
 
-def _reject_denied_functions(statement):
-    """Walks function nodes in the tree. A file-read or dblink call references no table at all,
-    so the allowlist below would never see it - this is the check that does."""
+def _function_names(node):
+    """The names a function node could be written as, lowercased. Anonymous nodes are functions
+    sqlglot does not model, so the raw name is all there is; modelled nodes carry sqlglot's own
+    names, which are frequently NOT the Postgres spelling - to_char parses as TimeToStr."""
+    raw = {node.name} if isinstance(node, exp.Anonymous) else set(node.sql_names())
+    return {name.lower() for name in raw if name}
+
+
+def _require_allowed_functions(statement):
+    """Allowlist, matched against AST function nodes rather than query text. A file read, a
+    dblink call or a 64MB repeat() references no table, so the table allowlist cannot see any of
+    them - and a denylist here only stops the ones somebody thought of first."""
     for node in statement.find_all(exp.Func):
-        names = {node.name} if isinstance(node, exp.Anonymous) else set(node.sql_names())
-        for name in names:
-            if name and name.lower() in cfg.DENIED_FUNCTIONS:
-                _fail("DENIED_FUNCTION", f"Function {name.lower()}() is not permitted.")
+        if type(node).__name__ in cfg.STRUCTURAL_FUNCTION_NODES:
+            continue
+
+        names = _function_names(node)
+        if names & cfg.ALLOWED_FUNCTIONS:
+            continue
+
+        denied = sorted(names & cfg.DENIED_FUNCTIONS)
+        if denied:
+            _fail("DENIED_FUNCTION", f"Function {denied[0]}() is not permitted.")
+
+        shown = sorted(names)[0] if names else type(node).__name__.lower()
+        _fail(
+            "FUNCTION_NOT_ALLOWED",
+            f"Function {shown}() is not on the allowlist. Permitted functions cover aggregates, "
+            "maths, null handling, dates, strings and window functions.",
+        )
 
 
 def _cte_names(statement):
@@ -199,7 +221,7 @@ def validate(sql, max_rows=None):
     statement = _parse_single_statement(sql)
     _require_plain_select(statement)
     _reject_write_clauses(statement)
-    _reject_denied_functions(statement)
+    _require_allowed_functions(statement)
     tables = _qualify_and_check_tables(statement)
     statement, limit_applied, injected = _apply_row_cap(statement, max_rows)
 
