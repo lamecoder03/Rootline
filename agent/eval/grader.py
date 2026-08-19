@@ -11,6 +11,19 @@ from .. import config as cfg
 from ..llm import ToolSpec, UserTurn
 from .answer_key import CAUSE_FAMILIES
 
+# What a missing field means when the extractor omits it. Every default is the reading LEAST
+# favourable to the agent, so a sloppy extraction can cost a brief a check but can never gift it
+# one. Smaller models drop optional-looking fields even when the schema marks them required.
+_DEFAULTS = {
+    "secondary_causes": [],
+    "explicitly_ruled_out": [],
+    "confidence": "High",
+    "states_cause_preceded_effect": False,
+    "cites_specific_figures": False,
+    "declares_itself_partial": False,
+    "evidence_quotes": [],
+}
+
 _EXTRACTION_SCHEMA = {
         "type": "object",
         "properties": {
@@ -75,6 +88,12 @@ of what actually happened, and do not fill gaps with inference. If the brief doe
 something, it does not claim it.
 """
 
+EXTRACTION_REQUEST = """The brief:
+
+---
+{brief}
+---"""
+
 CONFIDENCE_RANK = {"Low": 0, "Medium": 1, "High": 2}
 
 
@@ -91,22 +110,44 @@ class Grade:
     failure_notes: list = field(default_factory=list)
 
 
-def extract_claims(brief, client=None):
-    """A separate, tool-forced model call. Forced tool_choice so the output is always the
-    structured record rather than prose about the brief."""
-    client = client or cfg.build_client()
-    response = client.messages.create(
-        model=cfg.MODEL,
-        max_tokens=4000,
+def _normalise(claims):
+    """Fills anything the extractor omitted with the least generous reading, and drops values
+    outside the enum. A grade must never depend on the extractor being tidy."""
+    out = dict(_DEFAULTS)
+    out.update({k: v for k, v in (claims or {}).items() if v is not None})
+
+    families = set(CAUSE_FAMILIES)
+    if out.get("primary_cause") not in families:
+        raise RuntimeError(f"extraction returned no valid primary_cause: {claims!r}")
+    for key in ("secondary_causes", "explicitly_ruled_out"):
+        value = out.get(key) or []
+        if isinstance(value, str):
+            value = [value]
+        out[key] = [v for v in value if v in families]
+    if out.get("confidence") not in CONFIDENCE_RANK:
+        out["confidence"] = "High"
+    for key in ("states_cause_preceded_effect", "cites_specific_figures",
+                "declares_itself_partial"):
+        out[key] = bool(out.get(key))
+    return out
+
+
+def extract_claims(brief, provider=None):
+    """A separate model call with the tool FORCED, so the reply is always the structured record
+    and never prose about the brief. Goes through the neutral provider like everything else -
+    the grader is not allowed its own vendor client, or the pivot would only be half-done."""
+    provider = provider or cfg.build_provider()
+    reply = provider.chat(
         system=EXTRACTION_SYSTEM,
+        turns=[UserTurn(EXTRACTION_REQUEST.format(brief=brief))],
         tools=[EXTRACTION_TOOL],
-        tool_choice={"type": "tool", "name": "record_brief_claims"},
-        messages=[{"role": "user", "content": f"The brief:\n\n---\n{brief}\n---"}],
+        max_tokens=cfg.MAX_TOKENS,
+        require_tool=EXTRACTION_TOOL.name,
     )
-    for block in response.content:
-        if block.type == "tool_use":
-            return dict(block.input)
-    raise RuntimeError("extraction produced no tool call")
+    for call in reply.tool_calls:
+        if call.name == EXTRACTION_TOOL.name:
+            return _normalise(call.arguments)
+    raise RuntimeError(f"extraction produced no tool call (stop={reply.stop})")
 
 
 def grade(scenario, brief, provider=None):

@@ -24,7 +24,12 @@ TOOL_NAME = "query_warehouse"
 # with a different limit - a free-tier context budget. Found the hard way: a validator-approved
 # `SELECT * ... LIMIT 100000` came back correctly capped at 1,000 rows, and those 1,000 rows of
 # JSON then made the next request too large for the provider to accept at all.
-MAX_RESULT_CHARS = 4000
+# Sized by measurement in both directions. Too big and the request stops fitting; too SMALL
+# and it costs more than it saves - at 900 chars an ordinary 7-row result was truncated, and
+# the model spent five consecutive tool calls re-querying the same table with fewer columns
+# trying to get a complete answer. 1,800 chars (~545 tokens) holds a normal aggregate whole,
+# and four of them still fit the 8,000-token ceiling - see agent/config.py.
+MAX_RESULT_CHARS = 1800
 
 # The description IS the interface. The model never sees the validator's source, so every rule it
 # has to satisfy is stated here - otherwise it learns the boundary by tripping over it, and each

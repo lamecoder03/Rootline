@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -20,7 +21,27 @@ from .grader import grade
 RESULTS_PATH = os.path.join(REPO_ROOT, "docs", "sample_briefs", "eval_results.json")
 
 
+def load_previous():
+    """Results accumulate across runs instead of being overwritten. Not a convenience: the free
+    tier's 200,000-token DAILY cap is smaller than one full ten-scenario sweep, so the eval has
+    to be completable in batches over more than one day without losing what it already scored."""
+    if not os.path.exists(RESULTS_PATH):
+        return {}
+    with open(RESULTS_PATH, encoding="utf-8") as handle:
+        try:
+            return {r["anomaly_key"]: r for r in json.load(handle)}
+        except (ValueError, KeyError, TypeError):
+            return {}
+
+
 def main():
+    parser = argparse.ArgumentParser(description="Run the Day 8 agent eval.")
+    parser.add_argument("--only", action="append", dest="only",
+                        help="Restrict to these anomaly keys; repeatable.")
+    parser.add_argument("--source", choices=["ground_truth", "operator"], default=None,
+                        help="Restrict to one half of the answer key.")
+    args = parser.parse_args()
+
     if not answer_key.is_ready():
         print("The answer key is incomplete.\n")
         print("OPERATOR_SCENARIOS in agent/eval/answer_key.py is empty, so only the three")
@@ -32,12 +53,26 @@ def main():
         return 2
 
     scenarios = answer_key.all_scenarios()
+    if args.source:
+        scenarios = [s for s in scenarios if s.source == args.source]
+    if args.only:
+        wanted = set(args.only)
+        scenarios = [s for s in scenarios if s.anomaly_key in wanted]
+    if not scenarios:
+        print("No scenarios matched the filters.")
+        return 2
+
     by_key = {a["anomaly_key"]: a for a in load_anomalies([s.anomaly_key for s in scenarios])}
     provider = cfg.build_provider()
+    previous = load_previous()
     results = []
 
     print(f"Running {len(scenarios)} scenarios at {cfg.MAX_TOOL_CALLS} tool calls each, "
-          f"model {cfg.MODEL}.\n")
+          f"model {cfg.MODEL}.")
+    if previous:
+        print(f"Merging into {len(previous)} scenario(s) already scored in "
+              f"{os.path.relpath(RESULTS_PATH, REPO_ROOT)}.")
+    print()
 
     for scenario in scenarios:
         anomaly = by_key.get(scenario.anomaly_key)
@@ -69,6 +104,9 @@ def main():
             "tool_calls_used": investigation.calls_used,
             "tool_calls_rejected": investigation.rejected_calls,
             "truncated": investigation.truncated,
+            "results_elided": investigation.results_elided,
+            "stop_reason": investigation.stop_reason,
+            "model": cfg.MODEL,
             "elapsed_s": round(investigation.elapsed_s, 1),
             "input_tokens": investigation.input_tokens,
             "output_tokens": investigation.output_tokens,
@@ -92,10 +130,16 @@ def main():
               f"{sorted(calls)[len(calls)//2]} / {max(calls)}  (ceiling {cfg.MAX_TOOL_CALLS})")
     print("=" * 78)
 
+    merged = dict(previous)
+    merged.update({r["anomaly_key"]: r for r in results})
+    ordered = [merged[s.anomaly_key] for s in answer_key.all_scenarios()
+               if s.anomaly_key in merged]
+
     os.makedirs(os.path.dirname(RESULTS_PATH), exist_ok=True)
     with open(RESULTS_PATH, "w", encoding="utf-8", newline="\n") as handle:
-        json.dump(results, handle, indent=2)
-    print(f"\nResults: {os.path.relpath(RESULTS_PATH, REPO_ROOT)}")
+        json.dump(ordered, handle, indent=2)
+    print(f"\nResults: {os.path.relpath(RESULTS_PATH, REPO_ROOT)}  "
+          f"({len(ordered)} of {len(answer_key.all_scenarios())} scenarios scored in total)")
     return 0 if passed == len(results) else 1
 
 

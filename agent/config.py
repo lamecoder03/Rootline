@@ -57,8 +57,44 @@ EFFORT = "high"
 # token is generated. At 8,000 the very first request was rejected 413 on its own
 # ("Limit 8000, Requested 8819") with the prompt barely started. 2,500 leaves ~5,500 per minute
 # for the system prompt, the tool schema and the accumulated conversation, and a brief runs
-# ~800-1,200 tokens, so it is not a real constraint on the output.
-MAX_TOKENS = 2500
+# ~800-1,200 tokens, so it is not a real constraint on the output. Lowered again to 1,200
+# once the DAILY quota surfaced: max_tokens is billed up front against a 200,000/day budget
+# too, so every unused token of headroom is paid for on every one of the twenty calls.
+MAX_TOKENS = 1200
+
+# The per-request ceiling, read from the live response headers rather than from documentation:
+# x-ratelimit-limit-tokens = 8000 on every tool-calling model this account can reach. Groq bills
+# prompt + max_tokens against it TOGETHER and up front, so the real constraint is
+#
+#     fixed overhead + conversation so far + max_tokens  <=  8000
+#
+# Measured fixed overhead is 2,042 tokens (system prompt 5,396 chars + tool schema 2,208 +
+# the anomaly row 548, at 3.99 chars/token). That leaves roughly 4,000 tokens for the entire
+# evidence trail of a twenty-call investigation, which is not enough to keep every result in
+# full - hence agent/context_budget.py, which elides oldest-first and says so.
+#
+# This is a free-tier limit, not a property of the model: gpt-oss-120b's own context window is
+# far larger. groq/compound and compound-mini carry 70,000 TPM but return
+# "`tool calling` is not supported with this model", so the larger budget is unreachable here.
+CONTEXT_TOKEN_LIMIT = int(os.getenv("LLM_CONTEXT_TOKEN_LIMIT", "8000"))
+
+# Never ask for a brief shorter than this. If the history cannot be squeezed far enough to leave
+# this much room, the investigation has a problem that a smaller answer will not fix.
+MIN_OUTPUT_TOKENS = 700
+
+# The same 8,000 figure, used for a different job: pacing. One investigation request costs most
+# of a minute's quota, so requests must be spaced rather than merely retried. Reacting to 429s
+# was measured failing outright - four consecutive 65-second waits made no progress, because a
+# retry that under-sleeps is refused again and the window never clears. agent/llm/pacing.py
+# waits for the quota BEFORE spending it, which is possible only because Groq bills
+# prompt + max_tokens up front and both are known before the request is sent.
+TOKENS_PER_MINUTE = CONTEXT_TOKEN_LIMIT
+
+# gpt-oss models think before they answer, and those reasoning tokens are billed as output and
+# charged against max_tokens. Measured: a turn on gpt-oss-20b consumed its entire 1,200-token
+# allowance on reasoning and returned an EMPTY brief with finish_reason=length. "medium" keeps
+# enough deliberation for a lead-lag argument while leaving room to actually write the answer.
+REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "medium")
 
 # --- The production tool-call ceiling ---------------------------------------------------
 #

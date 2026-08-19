@@ -8,6 +8,10 @@
 # sqlglot parses every query the Day 7 agent guardrail inspects. An AST is the point: a
 # keyword blocklist cannot see a DROP hidden behind a second statement and false-positives on
 # a column honestly named delete_reason.
+# openai is the client for the Day 8 agent's LLM calls. It is here rather than `groq` because
+# Groq is reached through its OpenAI-compatible endpoint, so the same client also covers Together,
+# OpenRouter and a local vLLM — see agent/llm/openai_compat.py. anthropic keeps the alternative
+# adapter runnable, which is what makes "switching back is one env var" a checkable claim.
 # dbt is deliberately NOT here — it needs Python 3.13; see requirements-dbt.txt.
 
 faker
@@ -18,3 +22,6 @@ python-dotenv
 holidays
 scipy
 sqlglot
+openai
+anthropic
+httpx

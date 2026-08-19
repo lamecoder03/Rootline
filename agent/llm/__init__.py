@@ -13,7 +13,9 @@ from .base import (
 
 def _groq(cfg, http_client):
     from .openai_compat import groq_provider
-    return groq_provider(model=cfg.MODEL, http_client=http_client)
+    return groq_provider(model=cfg.MODEL, http_client=http_client,
+                         tokens_per_minute=getattr(cfg, 'TOKENS_PER_MINUTE', None),
+                         reasoning_effort=getattr(cfg, 'REASONING_EFFORT', None))
 
 
 def _openai_compatible(cfg, http_client):
@@ -21,6 +23,7 @@ def _openai_compatible(cfg, http_client):
     return OpenAICompatProvider(
         model=cfg.MODEL, base_url=cfg.LLM_BASE_URL, api_key_env=cfg.LLM_API_KEY_ENV,
         name="openai-compatible", http_client=http_client,
+        tokens_per_minute=getattr(cfg, 'TOKENS_PER_MINUTE', None),
     )
 
 

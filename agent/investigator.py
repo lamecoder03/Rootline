@@ -10,6 +10,7 @@ import uuid
 from dataclasses import dataclass, field
 
 from . import config as cfg
+from . import context_budget
 from . import prompts
 from .audit.audit_log import AuditLog
 from .guardrails.call_budget import CallBudget, ToolCallBudgetExceeded
@@ -38,6 +39,10 @@ class Investigation:
     tool_calls: list = field(default_factory=list)
     stop_reason: str = None
     elapsed_s: float = 0.0
+    # How many earlier result sets had to be dropped from the model's view to fit the
+    # provider's request ceiling. Non-zero means the brief was written with less in front
+    # of it than the agent actually gathered, which the eval reports rather than hides.
+    results_elided: int = 0
     input_tokens: int = 0
     output_tokens: int = 0
     provider: str = ""
@@ -66,13 +71,31 @@ def investigate(anomaly, provider=None, max_calls=None, verbose=True):
     started = time.perf_counter()
     truncated = False
     usage = {"in": 0, "out": 0}
+    stats = {"elided": 0}
 
     def ask(with_tools):
+        # The free tier bills prompt + max_tokens against one 8,000-token-per-minute budget, so
+        # the request has to be sized before it is sent, not retried after it is refused. Dropping
+        # the tool schema on the final turn is worth ~600 tokens of that budget.
+        fixed = context_budget.estimate_tokens(prompts.SYSTEM_PROMPT)
+        if with_tools:
+            fixed += context_budget.estimate_tokens(
+                WAREHOUSE_TOOL.description + str(WAREHOUSE_TOOL.input_schema))
+        sized, allowed = context_budget.fit(
+            turns, fixed_tokens=fixed, limit=cfg.CONTEXT_TOKEN_LIMIT,
+            reserve_output=cfg.MAX_TOKENS, min_output=cfg.MIN_OUTPUT_TOKENS)
+
+        elided = sum(1 for a, b in zip(sized, turns) if a is not b)
+        if verbose and elided:
+            print(f"    [context] {elided} earlier result set(s) elided to fit "
+                  f"{cfg.CONTEXT_TOKEN_LIMIT} tokens; answer capped at {allowed}")
+        stats["elided"] += elided
+
         reply = provider.chat(
             system=prompts.SYSTEM_PROMPT,
-            turns=turns,
+            turns=sized,
             tools=[WAREHOUSE_TOOL] if with_tools else None,
-            max_tokens=cfg.MAX_TOKENS,
+            max_tokens=allowed,
         )
         usage["in"] += reply.input_tokens
         usage["out"] += reply.output_tokens
@@ -82,7 +105,7 @@ def investigate(anomaly, provider=None, max_calls=None, verbose=True):
         return Investigation(
             anomaly_key=anomaly["anomaly_key"], investigation_id=investigation_id,
             brief=reply.text, truncated=truncated, tool_calls=tool.calls, stop_reason=stop,
-            elapsed_s=time.perf_counter() - started,
+            elapsed_s=time.perf_counter() - started, results_elided=stats["elided"],
             input_tokens=usage["in"], output_tokens=usage["out"],
             provider=provider.describe(),
         )
@@ -92,6 +115,18 @@ def investigate(anomaly, provider=None, max_calls=None, verbose=True):
 
         if reply.stop == "refusal":
             return finish(reply, "refusal")
+
+        # "length" means the answer was cut off mid-generation, not that the model finished.
+        # Returning here shipped an EMPTY brief: gpt-oss spends output budget on reasoning
+        # tokens before it emits any text, so a turn can hit the cap having written nothing.
+        # One retry without tools, which frees the ~600 tokens of tool schema for the answer.
+        if reply.stop == "length" and not reply.tool_calls:
+            if verbose:
+                print("    [output] turn hit the token cap before writing - retrying "
+                      "without tools so the whole allowance goes to the brief")
+            turns.append(UserTurn(prompts.OUTPUT_TRUNCATED_NUDGE))
+            return finish(ask(with_tools=False), "length_retry")
+
         if reply.stop != "tool_calls" or not reply.tool_calls:
             return finish(reply, reply.stop)
 

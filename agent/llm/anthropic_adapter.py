@@ -61,7 +61,7 @@ class AnthropicProvider(LLMProvider):
                 } for r in turn.results]})
         return messages
 
-    def chat(self, system, turns, tools=None, max_tokens=4096):
+    def chat(self, system, turns, tools=None, max_tokens=4096, require_tool=None):
         request = {
             "model": self.model,
             "max_tokens": max_tokens,
@@ -74,6 +74,8 @@ class AnthropicProvider(LLMProvider):
             request["output_config"] = {"effort": self.effort}
         if tools:
             request["tools"] = self._tools(tools)
+            if require_tool:
+                request["tool_choice"] = {"type": "tool", "name": require_tool}
 
         response = self.client.messages.create(**request)
 

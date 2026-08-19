@@ -82,9 +82,11 @@ class LLMProvider(ABC):
     model: str = "unknown"
 
     @abstractmethod
-    def chat(self, system, turns, tools=None, max_tokens=4096):
+    def chat(self, system, turns, tools=None, max_tokens=4096, require_tool=None):
         """Return the next AssistantTurn. `tools=None` means answer without calling anything,
-        which is how the loop forces a final write-up once the tool budget is gone."""
+        which is how the loop forces a final write-up once the tool budget is gone.
+        `require_tool` names a tool the model MUST call - used by the eval grader to turn a
+        free-text brief into a structured record, where prose is never an acceptable reply."""
 
     def describe(self):
         return f"{self.name}:{self.model}"

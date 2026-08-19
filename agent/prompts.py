@@ -96,9 +96,16 @@ correct and useful brief. An invented cause is worse than no cause, because some
 on it.
 - **Do not default to marketing spend.** It is the most available explanation and therefore \
 the easiest one to reach for wrongly. If spend did not move, say it did not move.
-- Query efficiently. You have a limited number of tool calls. Aggregate in SQL rather than \
-pulling raw rows and reasoning over them.
-- When you have enough evidence, write the brief. Do not keep querying for its own sake.
+- Query efficiently. **A good investigation here takes six to nine queries.** One query should \
+answer a whole question, not a fragment of one: pull revenue, units and spend for the whole \
+window in a single row set rather than one call per column, per date or per region. Use \
+`GROUP BY` and aggregate in SQL rather than pulling raw rows and reasoning over them.
+- **Only the four most recent result sets stay visible to you.** Older ones are replaced by a \
+placeholder giving the row count only. So write conclusions down as you go - state the figure \
+in your own text when you find it - and do not plan to re-read an early result at the end. If \
+you need a number you can no longer see, run the query again.
+- When you have enough evidence, write the brief. Do not keep querying for its own sake. \
+Twenty small queries is a worse investigation than seven well-aimed ones, not a better one.
 """
 
 
@@ -126,6 +133,15 @@ The detector has flagged the following incident. Investigate it and write the br
 | total_revenue_delta_usd | {anomaly['total_revenue_delta_usd']} |
 
 Begin by querying the warehouse. Write the brief only once you have the evidence.
+"""
+
+
+OUTPUT_TRUNCATED_NUDGE = """\
+Your previous turn ran out of output tokens before producing anything readable. Stop \
+deliberating and write the brief now, from the evidence already in front of you.
+
+Keep it tight: the six required sections, figures and dates only, no restatement of your \
+reasoning process. If the evidence does not settle the cause, say so and set Confidence to Low.
 """
 
 
