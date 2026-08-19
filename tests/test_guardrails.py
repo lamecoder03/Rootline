@@ -138,6 +138,34 @@ def test_cast_and_case_are_syntax_not_functions():
 
 
 @case
+def test_boolean_connectives_are_syntax_not_functions():
+    """sqlglot models AND and OR as Func subclasses, so an allowlist that does not exempt them
+    rejects every compound WHERE clause. Day 8 hit this on its first real query: the agent's
+    `WHERE category = 'Electronics' AND region = 'West'` came back as
+    `Function and() is not on the allowlist`. The Day 7 regression set missed it because none of
+    its queries had two conditions - so these assert the operator forms explicitly."""
+    T = "analytics.fct_daily_revenue"
+    S = "analytics.fct_daily_stockout"
+    for sql in (
+        f"SELECT 1 FROM {T} WHERE category = 'Apparel' AND region = 'West'",
+        f"SELECT 1 FROM {T} WHERE category = 'Apparel' OR category = 'Beauty'",
+        f"SELECT 1 FROM {T} WHERE NOT is_holiday",
+        f"SELECT 1 FROM {T} WHERE category = 'A' AND channel = 'B' AND region = 'C'",
+        f"SELECT snapshot_date, skus_out_of_stock FROM {S} "
+        f"WHERE category = 'Electronics' AND region = 'West' "
+        f"AND snapshot_date BETWEEN '2025-06-09' AND '2025-06-15'",
+        f"SELECT order_date, gross_revenue FROM {T} WHERE order_date IN ('2025-06-09') "
+        f"AND gross_revenue > 100 AND channel LIKE 'Mob%'",
+        f"SELECT sum(units) FROM {T} WHERE (category = 'A' AND region = 'B') OR is_weekend",
+        f"SELECT count(*) FROM {T} WHERE holiday_name IS NULL AND units > 0",
+    ):
+        try:
+            validate(sql)
+        except SqlValidationError as error:
+            raise AssertionError(f"compound predicate refused as {error.code}: {sql}") from error
+
+
+@case
 def test_legitimate_analyst_queries_still_pass():
     """The regression set. An over-tight function allowlist fails silently at Day 8 rather than
     loudly here, so every shape the agent is expected to write is asserted up front.

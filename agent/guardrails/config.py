@@ -95,7 +95,15 @@ ALLOWED_FUNCTIONS = frozenset({
 
 # Structural nodes sqlglot models as functions but which are SQL syntax, not callable functions.
 # Refusing them would refuse `gross_revenue::numeric(14,2)` and `CASE WHEN ... END`.
-STRUCTURAL_FUNCTION_NODES = ("Cast", "TryCast", "Case")
+#
+# `And` / `Or` are here because sqlglot models the boolean connectives as Func subclasses too.
+# Day 8 found this the hard way: with them absent, `WHERE category = 'X' AND region = 'Y'` was
+# rejected as `Function and() is not on the allowlist` - every compound WHERE clause in the
+# project. The Day 7 regression suite missed it because none of its 18 queries used two
+# conditions. Comparison, arithmetic, BETWEEN, IN, LIKE and IS NULL are NOT Func nodes and were
+# never affected. Adding these gives up nothing: a boolean connective reads no file and
+# allocates no memory.
+STRUCTURAL_FUNCTION_NODES = ("Cast", "TryCast", "Case", "And", "Or", "Xor", "Not")
 
 # --- Function denylist (kept for the error message only) ---------------------------------
 # The allowlist above already refuses everything here. This set survives so a known-dangerous
