@@ -68,3 +68,7 @@ agent/audit/*.log
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Machine-local CA bundle (AVG TLS interception, see agent/config.py). Regenerate with
+# python certs/build_ca_bundle.py — never commit a machine trust store.
+certs/*.pem
