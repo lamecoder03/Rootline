@@ -324,8 +324,11 @@ Harness: `python -m tests.attack_attempts`. Full transcript at the end of this d
 **Headline: 67 attempts, 54 blocked as expected, 16 legitimate reads allowed, 0 unexpected
 outcomes, and 67 of 67 attempts reconciled against rows in the audit log.**
 
-(54 + 16 = 70 rather than 67 because the three owner-side trigger tests in 5.4 are performed as
-`revenue_ops`, which is not the audited identity.)
+Those are two different populations and the harness now says so rather than leaving the
+arithmetic to the reader: **70 outcomes = 67 agent-identity attempts + 3 owner-identity trigger
+tests**. The three owner-side attempts in 5.4 are performed as `revenue_ops`, so they correctly
+cannot appear in a log written over the agent's connection. Only the 67 have to reconcile, and
+the harness asserts that split rather than printing one merged total.
 
 ### 5.1 Reading a forbidden schema — blocked by the grants
 
@@ -459,9 +462,15 @@ record rather than looking like an investigation that simply ended.
 ### 5.6 Audit reconciliation — did every attempt leave a row?
 
 ```
-  Attempts made by this harness : 67
-  Audit rows found for ATTACK-3e9af2aa : 67
-  Reconciles: YES
+  Two populations, and they are deliberately different sizes:
+
+    Outcomes printed above           : 70
+      agent-identity attempts        :  67  <- each MUST leave an audit row
+      owner-identity trigger tests   :   3  <- each MUST NOT: the log is written over the
+                                            agent's connection, and revenue_ops is not
+                                            the audited identity
+    Audit rows for ATTACK-c8120893  : 67
+    Reconciles                       : YES (67 audited attempts == 67 rows)
 
   By recorded outcome:
     budget_exceeded      3
@@ -472,7 +481,17 @@ record rather than looking like an investigation that simply ended.
   Blocked attempts that left a row : 51
   Successful reads that left a row : 16
   Author of every row (db_role)    : ['revenue_agent']
+------------------------------------------------------------------------------------------------
+  Attempts blocked as expected :  54  (51 audited + 3 owner-side)
+  Attempts allowed as expected :  16
+  UNEXPECTED outcomes          :   0
+  Audit trail reconciles       : True (67 of 67)
 ```
+
+The `70 = 67 + 3` split is asserted, not just printed: if the two counters ever disagree the
+harness prints an explicit mismatch line. The audit table is **append-only, so it accumulates
+across runs** — every run is isolated by `investigation_id`, and the reconciliation above is
+scoped to one.
 
 Broken out by refusal code, straight from the table:
 

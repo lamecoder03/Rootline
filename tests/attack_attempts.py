@@ -23,7 +23,11 @@ from agent.guardrails.sql_validator import SqlValidationError, validate
 RULE = "=" * 96
 THIN = "-" * 96
 
-results = {"blocked": 0, "allowed": 0, "unexpected": 0}
+# Two populations, counted separately on purpose. Every attempt made as the agent must leave an
+# audit row; the owner-identity trigger tests in section 4 must NOT, because the log is written
+# over the agent's connection and the owner is not the audited identity. Printing one total for
+# both would make the summary look like it had lost three rows.
+results = {"blocked": 0, "allowed": 0, "unexpected": 0, "owner_side": 0}
 attempts = {"audited": 0}
 _counter = {"n": 0}
 
@@ -39,13 +43,17 @@ def _banner(title):
     print(f"\n{RULE}\n{title}\n{RULE}")
 
 
-def _outcome(expect_block, was_blocked, detail):
+def _outcome(expect_block, was_blocked, detail, audited=True):
+    """audited=False marks an attempt made as the OWNER rather than the agent. It is still a real
+    result, it just belongs to the population the agent's audit log cannot contain."""
     if was_blocked == expect_block:
         results["blocked" if was_blocked else "allowed"] += 1
         marker = "BLOCKED " if was_blocked else "ALLOWED "
     else:
         results["unexpected"] += 1
         marker = "!! UNEXPECTED"
+    if not audited:
+        results["owner_side"] += 1
     print(f"    {marker} {detail}")
 
 
@@ -246,7 +254,8 @@ def section_audit_tamper(agent_engine, audit):
         print(f"  {sql}")
         direct_attack(agent_engine, audit, sql, label="audit_tamper_attempt")
 
-    print("\n  And as the OWNER, whom the grants do not restrain - the trigger must:")
+    print("\n  And as the OWNER, whom the grants do not restrain - the trigger must.")
+    print("  These three run as revenue_ops, so they are NOT written to the agent's audit log.")
     owner = build_owner_engine()
     for sql in (f"DELETE FROM {cfg.AUDIT_QUALIFIED}",
                 f"UPDATE {cfg.AUDIT_QUALIFIED} SET row_count = 0",
@@ -255,10 +264,10 @@ def section_audit_tamper(agent_engine, audit):
         try:
             with owner.begin() as connection:
                 connection.execute(text(sql))
-            _outcome(True, False, "MUTATION SUCCEEDED - append-only is broken")
+            _outcome(True, False, "MUTATION SUCCEEDED - append-only is broken", audited=False)
         except DBAPIError as error:
             message = str(getattr(error, "orig", error)).strip().splitlines()[0]
-            _outcome(True, True, message[:82])
+            _outcome(True, True, message[:82], audited=False)
 
 
 def section_budget(agent_engine, audit):
@@ -309,9 +318,26 @@ def main():
     for row in trail:
         by_outcome[row["validation_outcome"]] = by_outcome.get(row["validation_outcome"], 0) + 1
 
-    print(f"  Attempts made by this harness : {attempts['audited']}")
-    print(f"  Audit rows found for {investigation_id} : {len(trail)}")
-    print(f"  Reconciles: {'YES' if len(trail) == attempts['audited'] else 'NO - ROWS ARE MISSING'}")
+    total_outcomes = results["blocked"] + results["allowed"] + results["unexpected"]
+    owner_side = results["owner_side"]
+    audited = attempts["audited"]
+    reconciles = len(trail) == audited
+
+    print("  Two populations, and they are deliberately different sizes:\n")
+    print(f"    Outcomes printed above           : {total_outcomes}")
+    print(f"      agent-identity attempts        : {audited:>3}  <- each MUST leave an audit row")
+    print(f"      owner-identity trigger tests   : {owner_side:>3}  <- each MUST NOT: the log is "
+          f"written over the")
+    print(f"                                            agent's connection, and revenue_ops is not")
+    print(f"                                            the audited identity")
+    print(f"    Audit rows for {investigation_id}  : {len(trail)}")
+    print(f"    Reconciles                       : "
+          f"{'YES' if reconciles else 'NO - ROWS ARE MISSING'} "
+          f"({audited} audited attempts == {len(trail)} rows)")
+
+    if total_outcomes != audited + owner_side:
+        print(f"    !! {total_outcomes} outcomes != {audited} audited + {owner_side} owner-side")
+
     print("\n  By recorded outcome:")
     for outcome in sorted(by_outcome):
         print(f"    {outcome:<18} {by_outcome[outcome]:>3}")
@@ -320,12 +346,12 @@ def main():
     print(f"  Successful reads that left a row : {by_outcome.get('pass', 0)}")
     print(f"  Author of every row (db_role)    : {sorted({row['db_role'] for row in trail})}")
 
-    reconciles = len(trail) == attempts["audited"]
     print(THIN)
-    print(f"  Attempts blocked as expected : {results['blocked']}")
-    print(f"  Attempts allowed as expected : {results['allowed']}")
-    print(f"  UNEXPECTED outcomes          : {results['unexpected']}")
-    print(f"  Audit trail reconciles       : {reconciles}")
+    print(f"  Attempts blocked as expected : {results['blocked']:>3}  "
+          f"({results['blocked'] - owner_side} audited + {owner_side} owner-side)")
+    print(f"  Attempts allowed as expected : {results['allowed']:>3}")
+    print(f"  UNEXPECTED outcomes          : {results['unexpected']:>3}")
+    print(f"  Audit trail reconciles       : {reconciles} ({len(trail)} of {audited})")
     print(THIN)
     print(f"\nFull trail:  SELECT * FROM {cfg.AUDIT_QUALIFIED} "
           f"WHERE investigation_id = '{investigation_id}' ORDER BY audit_id;")
