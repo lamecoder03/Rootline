@@ -64,9 +64,12 @@ final as (
         trim(to_char(revenue.order_date, 'Day'))                as day_of_week,
         extract(isodow from revenue.order_date) in (6, 7)       as is_weekend,
 
-        category_cost_basis.skus_in_category,
-        category_cost_basis.skus_with_unit_cost,
-        category_cost_basis.skus_excluded_from_cost_basis
+        -- coalesced to 0 for a category with no SKUs registered yet (a new launch): there is no
+        -- cost basis to exclude from, which is a known zero rather than an unknown.
+        coalesce(category_cost_basis.skus_in_category, 0)        as skus_in_category,
+        coalesce(category_cost_basis.skus_with_unit_cost, 0)     as skus_with_unit_cost,
+        coalesce(category_cost_basis.skus_excluded_from_cost_basis, 0)
+                                                                 as skus_excluded_from_cost_basis
 
     from revenue
 

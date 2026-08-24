@@ -7,7 +7,7 @@ import os
 
 from dotenv import load_dotenv
 
-# CLAUDE.md's third gotcha, now applying to API keys as well as the database: `.env` is a file,
+# The dbt `.env` gotcha, now applying to API keys as well as the database: `.env` is a file,
 # not the process environment, and every vendor SDK reads its key from the latter. They defer
 # that read to request time, so a missing key does not fail at construction - it fails seconds
 # into a run. Loading here, in the module every agent entry point imports, closes that gap.
@@ -27,8 +27,8 @@ if os.path.exists(_CA_BUNDLE):
 
 # --- Provider ---------------------------------------------------------------------------
 # Groq, on its free tier. The project was built against Anthropic and the Anthropic adapter is
-# still present and working; the switch is a cost decision, documented in CLAUDE.md's LOCKED
-# SCOPE rather than quietly applied. `agent/llm/` is what makes it a one-line change.
+# still present and working; the switch is a cost decision, documented in the README's
+# provider-pivot note rather than quietly applied. `agent/llm/` is what makes it a one-line change.
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")
 
 _MODELS = {
@@ -144,8 +144,9 @@ REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "medium")
 # That the change also makes the eval affordable on a free tier is a welcome side effect of
 # fixing a reasoning defect, and would not on its own justify degrading the agent.
 #
-# Still reported per investigation in docs/day8_agent_eval.md: calls used, calls rejected, and
-# how many result sets had to be elided - so this number stays a measurement, not a belief.
+# The eval harness records per investigation - calls used, calls rejected, and how many result
+# sets had to be elided - so this number stays a measurement, not a belief. No scored run has
+# completed yet, so no results file exists; agent/eval/run_eval.py writes one when it does.
 MAX_TOOL_CALLS = 8
 
 # Where briefs land. One markdown file per investigation, kept in git, because the brief is the

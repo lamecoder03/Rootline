@@ -1,5 +1,8 @@
 # Day 9 — DAX measure reference
 
+> **NOT YET BUILT — prep work only, dashboard not implemented.** These measures are specified
+> but not yet entered into a `.pbix` file.
+
 Every measure the dashboard needs, with the assumption it rests on stated next to it. This is
 the Day 4 `estimated_` prefix discipline carried into the BI layer: a measure whose name does
 not admit its approximation will be quoted as fact by whoever reads the dashboard.

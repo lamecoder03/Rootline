@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 
 from detection import config as cfg
 from detection.detector import detect, to_episodes
-from detection.persist import build_engine, persist
+from detection.persist import build_engine, persist, persist_coverage
 
 
 def main():
@@ -27,9 +27,20 @@ def main():
     print(f"  flagged {flagged:,} cell-days "
           f"({100.0 * flagged / len(points):.2f}%) in {len(episodes)} episodes")
 
+    coverage = points.attrs.get("cell_coverage")
+    if coverage is not None and not coverage.empty:
+        unjudgeable = coverage[coverage.confidence != "normal"]
+        if len(unjudgeable):
+            print(f"  {len(unjudgeable)} cell(s) below the history gates and NOT judgeable:")
+            for row in unjudgeable.itertuples():
+                print(f"    {row.cell_key:<38} {row.days_observed:>4} days observed, "
+                      f"{row.pct_scored:>5.1f}% scored, confidence={row.confidence}")
+
     episode_count, point_count = persist(engine, episodes, points, run_id, detected_at)
+    coverage_count = persist_coverage(engine, coverage, run_id, detected_at)
     print(f"Wrote {cfg.OUTPUT_SCHEMA}.{cfg.EPISODES_TABLE:<24} {episode_count:>6,} rows")
     print(f"Wrote {cfg.OUTPUT_SCHEMA}.{cfg.POINTS_TABLE:<24} {point_count:>6,} rows")
+    print(f"Wrote {cfg.OUTPUT_SCHEMA}.{cfg.COVERAGE_TABLE:<24} {coverage_count:>6,} rows")
     print(f"run_id {run_id}")
     return 0
 

@@ -1,10 +1,13 @@
 # Day 9 — Building the dashboard in Power BI Desktop
 
+> **NOT YET BUILT — prep work only, dashboard not implemented.** This is a step-by-step guide
+> to follow, not a record of a finished build. No `.pbix` exists yet.
+
 A step-by-step build, to be followed by hand in the Power BI Desktop GUI. Connection details are
 in `docs/day9_powerbi_connection.md`; every measure referenced here is defined in
 `docs/day9_dax_measures.md`.
 
-**What this dashboard is for.** CLAUDE.md is explicit that the deliverable is the agent's
+**What this dashboard is for.** The project's founding decision is that the deliverable is the agent's
 written brief, not the dashboard — *"the dashboard exists so a human can sanity-check the
 brief."* That single sentence decides every layout question below. This is not an exploration
 tool and not an executive summary. It is the page a Revenue Ops lead opens **next to a brief**

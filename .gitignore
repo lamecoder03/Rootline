@@ -3,6 +3,8 @@
 # Covers Python, dbt, environment files, Docker artifacts, and editor/OS noise.
 
 # --- Environment / secrets ---
+# internal build notes - local-only, never tracked
+CLAUDE.md
 .env
 .env.*
 !.env.example

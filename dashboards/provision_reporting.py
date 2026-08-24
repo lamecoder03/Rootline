@@ -12,7 +12,7 @@ import sys
 from psycopg2 import sql
 from sqlalchemy import text
 
-# Imported rather than re-implemented. CLAUDE.md's "one credential source" principle applies here
+# Imported rather than re-implemented. The project's "one credential source" principle applies here
 # exactly as it does to dbt and the loader: these helpers read POSTGRES_* from the environment and
 # escape the DSN, and a second copy of that logic is a second thing to get wrong. Nothing in the
 # agent package is modified by this module - it only borrows the owner connection builder.

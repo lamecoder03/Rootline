@@ -1,7 +1,7 @@
-# Deliberate attacks against the Day 7 guardrails, run against the real database.
+# Deliberate attacks against the security guardrails, run against the real database.
 # Exists because a guardrail nobody attacked is a guardrail nobody has evidence for; this is the
-# harness that produces the transcript in docs/day7_guardrails.md.
-# Every attempt is composed exactly as the Day 8 loop will compose it - budget, then validator,
+# harness that produces the transcript in docs/security_guardrails.md.
+# Every attempt is composed exactly as the investigation loop composes it - budget, then validator,
 # then the read-only connection - and every attempt, blocked or not, writes an audit row.
 #
 #   python -m tests.attack_attempts
@@ -210,7 +210,7 @@ def section_validator(agent_engine, audit, budget):
         ("file read via function", "SELECT pg_read_file('/etc/passwd')"),
         ("sleep via function", "SELECT pg_sleep(300) FROM analytics.dim_product"),
         # The six a function DENYLIST let through. Each was measured reaching the database and
-        # succeeding as revenue_agent before the allowlist replaced it - see docs/day7_guardrails.md.
+        # succeeding as revenue_agent before the allowlist replaced it - see docs/security_guardrails.md.
         ("view-definition leak (reached the DB before the allowlist)",
          "SELECT pg_get_viewdef('analytics.fct_daily_stockout'::regclass) FROM analytics.dim_product"),
         ("WAL write from a read-only role (reached the DB before)",

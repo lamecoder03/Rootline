@@ -67,6 +67,11 @@ POINTS_TABLE = "detected_anomaly_points"
 EPISODES_TABLE = "detected_anomalies"
 OUTPUT_SCHEMA = "analytics"
 
+# Per-cell confidence report. Written alongside the two anomaly tables so a consumer can ask
+# "is this cell judgeable yet?" before trusting the absence of an anomaly for it. A newly
+# launched category has no baseline, and silence about it would read as good news.
+COVERAGE_TABLE = "detection_coverage"
+
 # Consecutive flagged days in one cell are one incident. A gap of more than this many days
 # starts a new episode rather than bridging two unrelated events.
 EPISODE_MAX_GAP_DAYS = 1

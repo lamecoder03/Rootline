@@ -30,6 +30,9 @@ cost_basis_disagrees_with_dimension as (
 
 ),
 
+-- The counts must always be present. cost_basis_coverage_pct is exempt ONLY where the category
+-- has no SKUs at all: a percentage over zero SKUs is undefined, and is_margin_estimable=false
+-- already states the gap on that row. Everywhere a basis exists, coverage must be reported.
 margin_row_hides_the_gap as (
 
     select distinct
@@ -37,7 +40,19 @@ margin_row_hides_the_gap as (
     from {{ ref('fct_daily_margin') }}
     where skus_excluded_from_cost_basis is null
        or skus_in_category is null
-       or cost_basis_coverage_pct is null
+       or (cost_basis_coverage_pct is null and skus_in_category > 0)
+
+),
+
+-- A category with no cost basis must say so rather than stay silent: the flag is the disclosure
+-- that replaces the coverage percentage, so it may not be NULL or TRUE on such a row.
+uncosted_category_does_not_declare_itself as (
+
+    select distinct
+        'category ' || category || ' has no cost basis but does not declare it' as failure
+    from {{ ref('fct_daily_margin') }}
+    where skus_in_category = 0
+      and coalesce(is_margin_estimable, true)
 
 ),
 
@@ -65,6 +80,8 @@ cost_basis_used_an_uncosted_sku as (
 select failure from cost_basis_disagrees_with_dimension
 union all
 select failure from margin_row_hides_the_gap
+union all
+select failure from uncosted_category_does_not_declare_itself
 union all
 select failure from margin_reported_without_a_cost_basis
 union all

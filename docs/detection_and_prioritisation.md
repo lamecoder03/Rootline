@@ -1,4 +1,4 @@
-# Day 5 — Anomaly detection: method, design choices, and validation results
+# Detection & Prioritisation — anomaly detection: method, design choices, and validation results
 
 The detector watches 60 revenue series independently and reports the days where one of them
 moved unlike its own history *and* unlike the rest of the business on that same day.
@@ -21,7 +21,7 @@ gets wrong.
 | Christmas Day | 1 of 120 cell-days flagged — analysed below |
 | Episode precision | 70.5% (31 real, 13 false, over two years) |
 
-The business case in CLAUDE.md is that a Revenue Ops lead currently learns about a dip three to
+The business case is that a Revenue Ops lead currently learns about a dip three to
 seven days late. The worst case here is four days, and two of the three fire within one day.
 
 ---
@@ -197,7 +197,7 @@ Two tables in `analytics`, replaced in full on every run.
 **`analytics.detected_anomalies`** — one row per incident. Consecutive flagged days in one cell
 collapse into a single row, because a seven-day stockout is one thing that happened, not seven.
 Carries the slice, the window, direction, peak date, peak z, peak delta %, total revenue delta
-in USD, and the minimum q-value. **This is the table the Day 8 agent investigates.**
+in USD, and the minimum q-value. **This is the table the investigation agent reads.**
 
 **`analytics.detected_anomaly_points`** — one row per flagged day, joined to the episode by
 `anomaly_key`. The per-day evidence behind each incident: the observed and expected revenue, the
@@ -205,12 +205,12 @@ z-score, which confirmation window fired, and the p and q values.
 
 Three choices worth defending:
 
-- **`analytics`, not a new schema.** The CLAUDE.md guardrail grants the agent read-only access to
+- **`analytics`, not a new schema.** The security design grants the agent read-only access to
   the analytics schema alone. Detection output is something the agent must read, so it belongs
   where that grant already reaches. dbt only manages its own models and will not touch these.
 - **Replace in full, not append.** The detector is deterministic over a fixed window, so
-  re-running must converge on one answer rather than accumulate duplicates every time the Day 6
-  DAG fires. `detection_run_id` and `detected_at` record which run produced the current rows.
+  re-running must converge on one answer rather than accumulate duplicates every time the
+  Airflow DAG fires. `detection_run_id` and `detected_at` record which run produced the current rows.
 - **Only flagged points are stored,** not all 38,460 scores. The unflagged scores are a
   diagnostic the validation harness recomputes on demand; persisting them would bloat the table
   the agent queries without telling it anything it needs.

@@ -29,15 +29,22 @@ models:
         data_tests: [not_null]
 
       - name: category
+        description: >
+          'Wearables' is the newly launched category behind the sparse-history scenario: revenue
+          exists, no SKUs are registered in dim_product yet, and no marketing spend has been
+          booked. Every test below that it cannot satisfy is scoped around it explicitly, so the
+          gap is declared in the contract rather than hidden by a weakened test.
         data_tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['Electronics', 'Apparel', 'Home & Garden', 'Sports', 'Beauty']
+                values: ['Electronics', 'Apparel', 'Home & Garden', 'Sports', 'Beauty', 'Wearables']
           - relationships:
               arguments:
                 to: ref('dim_product')
                 field: category
+              config:
+                where: "category <> 'Wearables'"
 
       - name: channel
         data_tests:
@@ -64,9 +71,13 @@ models:
         description: "Spend allocated down to this region. Sums back to the source cell exactly."
         data_tests: [not_null]
       - name: spend_allocation_basis
-        description: "Which allocation rule produced marketing_spend_usd on this row."
+        description: >
+          Which allocation rule produced marketing_spend_usd on this row. NULL only for a
+          category with no spend booked at all -- currently the newly launched 'Wearables'.
         data_tests:
-          - not_null
+          - not_null:
+              config:
+                where: "category <> 'Wearables'"
           - accepted_values:
               arguments:
                 values: ['trailing_28d_revenue_share', 'even_split_no_history']
@@ -90,7 +101,10 @@ models:
         data_tests: [not_null]
 
       - name: skus_excluded_from_cost_basis
-        description: "How many SKUs in this category have no unit_cost. Travels on the fact so the gap is visible without opening the margin mart."
+        description: >
+          How many SKUs in this category have no unit_cost. Travels on the fact so the gap is
+          visible without opening the margin mart. Zero -- never NULL -- for a category with no
+          SKUs registered yet: there is no cost basis to exclude from.
         data_tests: [not_null]
 
   # ------------------------------------------------------------------------------------
@@ -119,6 +133,8 @@ models:
               arguments:
                 to: ref('dim_product')
                 field: category
+              config:
+                where: "category <> 'Wearables'"
       - name: channel
         data_tests: [not_null]
       - name: region
@@ -126,8 +142,13 @@ models:
       - name: gross_revenue
         data_tests: [not_null]
       - name: cost_basis_avg_unit_cost
-        description: "Average unit cost over costed SKUs in this category only."
-        data_tests: [not_null]
+        description: >
+          Average unit cost over costed SKUs in this category only. NULL for a newly launched
+          category with no SKUs registered yet -- there is nothing to average.
+        data_tests:
+          - not_null:
+              config:
+                where: "category <> 'Wearables'"
       - name: estimated_cogs
         description: "units multiplied by cost_basis_avg_unit_cost. NULL only if the category has no costed SKU at all."
       - name: estimated_gross_margin
@@ -142,8 +163,13 @@ models:
         description: "The visible exclusion count. Never NULL -- a margin cannot be read without it."
         data_tests: [not_null]
       - name: cost_basis_coverage_pct
-        description: "Percentage of the category SKUs that carry a unit_cost."
-        data_tests: [not_null]
+        description: >
+          Percentage of the category SKUs that carry a unit_cost. NULL for a newly launched
+          category with no SKUs -- a coverage percentage over zero SKUs is undefined, not 0%.
+        data_tests:
+          - not_null:
+              config:
+                where: "category <> 'Wearables'"
       - name: excluded_sku_ids
         description: "The specific SKUs left out of the cost basis, so the gap is auditable and not just counted."
 
@@ -220,7 +246,7 @@ models:
       - name: subcategory
         data_tests: [not_null]
       - name: unit_cost
-        description: "NULL for 8 SKUs. Deliberately never imputed -- see docs/day3_staging_decisions.md."
+        description: "NULL for 8 SKUs. Deliberately never imputed -- see docs/data_reconciliation.md."
       - name: is_margin_calculable
         description: "Whether unit_cost is present. The single flag every margin mart filters its cost basis on."
         data_tests: [not_null]

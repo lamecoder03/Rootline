@@ -1,0 +1,234 @@
+[
+  {
+    "anomaly_key": "DET-0008",
+    "label": "ANOM-01 \u00b7 Apparel promotion \u00b7 Marketplace/West",
+    "source": "ground_truth",
+    "ground_truth_id": "ANOM-01",
+    "expected_cause": "promotion",
+    "acceptable_alternatives": [
+      "marketing_spend",
+      "pricing"
+    ],
+    "claimed_cause": "none_identifiable",
+    "passed": false,
+    "checks": {
+      "names the expected cause": false,
+      "explicitly rules out inventory": false,
+      "identifies the cause-before-effect lag": false,
+      "cites specific figures": true
+    },
+    "failure_notes": [
+      "concluded 'none_identifiable', expected one of ['marketing_spend', 'pricing', 'promotion']",
+      "did not explicitly rule out 'inventory'",
+      "did not state that the cause preceded the effect"
+    ],
+    "extraction": {
+      "secondary_causes": [
+        "marketing_spend",
+        "inventory"
+      ],
+      "explicitly_ruled_out": [],
+      "confidence": "Low",
+      "states_cause_preceded_effect": false,
+      "cites_specific_figures": true,
+      "declares_itself_partial": true,
+      "evidence_quotes": [
+        "peak was on 2025\u201103\u201115 with a +128\u202f% lift versus expected revenue (z\u2011score\u202f12.8).",
+        "The average daily spend in the 30\u202fdays preceding the anomaly is $52.76.",
+        "Stock\u2011out rates are 0\u202f% in the weeks before the anomaly (the only non\u2011zero rate in the sample is 14.3\u202f% on 2025\u201102\u201123\u202f\u2013\u202f25)."
+      ],
+      "primary_cause": "none_identifiable"
+    },
+    "tool_calls_used": 8,
+    "tool_calls_rejected": 0,
+    "truncated": true,
+    "results_elided": 4,
+    "stop_reason": "budget_exceeded",
+    "model": "openai/gpt-oss-120b",
+    "elapsed_s": 545.5,
+    "input_tokens": 45290,
+    "output_tokens": 3079,
+    "brief_path": "docs/sample_briefs/eval/DET-0008.md",
+    "investigation_id": "INV-DET-0008-ceffa2",
+    "provider": "groq:openai/gpt-oss-120b"
+  },
+  {
+    "anomaly_key": "DET-0023",
+    "label": "ANOM-02 \u00b7 Electronics West stockout \u00b7 THE NEGATIVE CONTROL",
+    "source": "ground_truth",
+    "ground_truth_id": "ANOM-02",
+    "expected_cause": "inventory",
+    "acceptable_alternatives": [],
+    "claimed_cause": "inventory",
+    "passed": true,
+    "checks": {
+      "names the expected cause": true,
+      "explicitly rules out marketing_spend": true,
+      "cites specific figures": true
+    },
+    "failure_notes": [],
+    "extraction": {
+      "secondary_causes": [],
+      "explicitly_ruled_out": [
+        "marketing_spend"
+      ],
+      "confidence": "High",
+      "states_cause_preceded_effect": false,
+      "cites_specific_figures": true,
+      "declares_itself_partial": true,
+      "evidence_quotes": [
+        "gross revenue fell from the expected\u202f$15,657.49 to $8,467.81, a\u202f\u201166\u202f% dip on the worst day (2025\u201106\u201114)",
+        "Avg\u202fstockout\u202frate\u202f% ... Pre\u2011anomaly ... 2.80\u202f% ... Anomaly ... 5.33\u202f%",
+        "Avg\u202fspend pre\u2011anomaly\u202f=\u202f$108.35/day; Avg\u202fspend anomaly\u202f=\u202f$107.77/day"
+      ],
+      "primary_cause": "inventory"
+    },
+    "tool_calls_used": 8,
+    "tool_calls_rejected": 1,
+    "truncated": true,
+    "results_elided": 1,
+    "stop_reason": "budget_exceeded",
+    "model": "openai/gpt-oss-120b",
+    "elapsed_s": 545.6,
+    "input_tokens": 43567,
+    "output_tokens": 4529,
+    "brief_path": "docs/sample_briefs/eval/DET-0023.md",
+    "investigation_id": "INV-DET-0023-c0700e",
+    "provider": "groq:openai/gpt-oss-120b"
+  },
+  {
+    "anomaly_key": "DET-0029",
+    "label": "ANOM-03 \u00b7 Mobile App budget cut \u00b7 Home & Garden/North",
+    "source": "ground_truth",
+    "ground_truth_id": "ANOM-03",
+    "expected_cause": "marketing_spend",
+    "acceptable_alternatives": [],
+    "claimed_cause": "marketing_spend",
+    "passed": false,
+    "checks": {
+      "names the expected cause": true,
+      "explicitly rules out inventory": false,
+      "identifies the cause-before-effect lag": false,
+      "cites specific figures": true
+    },
+    "failure_notes": [
+      "did not explicitly rule out 'inventory'",
+      "did not state that the cause preceded the effect"
+    ],
+    "extraction": {
+      "secondary_causes": [],
+      "explicitly_ruled_out": [],
+      "confidence": "High",
+      "states_cause_preceded_effect": false,
+      "cites_specific_figures": true,
+      "declares_itself_partial": true,
+      "evidence_quotes": [
+        "Revenue fell \u2248\u202f35\u202f% on the worst day (2025\u201109\u201130)",
+        "total shortfall over the 9\u2011day window was \u2011$4,335.22",
+        "Marketing\u2011spend reduction preceding the revenue dip"
+      ],
+      "primary_cause": "marketing_spend"
+    },
+    "tool_calls_used": 8,
+    "tool_calls_rejected": 0,
+    "truncated": true,
+    "results_elided": 4,
+    "stop_reason": "budget_exceeded",
+    "model": "openai/gpt-oss-120b",
+    "elapsed_s": 545.5,
+    "input_tokens": 47296,
+    "output_tokens": 3744,
+    "brief_path": "docs/sample_briefs/eval/DET-0029.md",
+    "investigation_id": "INV-DET-0029-4a7ed0",
+    "provider": "groq:openai/gpt-oss-120b"
+  },
+  {
+    "anomaly_key": "DET-0005",
+    "label": "Beauty \u00b7 Mobile App \u00b7 North \u2014 Christmas Day",
+    "source": "operator",
+    "ground_truth_id": null,
+    "expected_cause": "calendar",
+    "acceptable_alternatives": [],
+    "claimed_cause": "calendar",
+    "passed": false,
+    "checks": {
+      "names the expected cause": true,
+      "cites specific figures": false
+    },
+    "failure_notes": [
+      "cause section lacks dated, specific figures"
+    ],
+    "extraction": {
+      "secondary_causes": [],
+      "explicitly_ruled_out": [],
+      "confidence": "Medium",
+      "states_cause_preceded_effect": false,
+      "cites_specific_figures": false,
+      "declares_itself_partial": true,
+      "evidence_quotes": [
+        "On 2024\u201112\u201125 the Beauty slice on the Mobile\u202fApp in the North region posted $489.17 of gross revenue versus an expected $656.36 \u2013 a \u201125.47\u202f% drop (\u2011$167.19).",
+        "The day before (2024\u201112\u201124) revenue was already low at $846.31 (\u201138\u202f% vs the prior week\u2019s average of $1,680).",
+        "Revenue rebounded on 2024\u201112\u201126 to $2,162.05."
+      ],
+      "primary_cause": "calendar"
+    },
+    "tool_calls_used": 8,
+    "tool_calls_rejected": 0,
+    "truncated": true,
+    "results_elided": 0,
+    "stop_reason": "budget_exceeded",
+    "model": "openai/gpt-oss-120b",
+    "elapsed_s": 545.7,
+    "input_tokens": 39829,
+    "output_tokens": 4647,
+    "brief_path": "docs/sample_briefs/eval/DET-0005.md",
+    "investigation_id": "INV-DET-0005-b7215d",
+    "provider": "groq:openai/gpt-oss-120b"
+  },
+  {
+    "anomaly_key": "DET-0018",
+    "label": "Home & Garden \u00b7 Web \u00b7 West \u2014 concurrent with the Apparel promotion",
+    "source": "operator",
+    "ground_truth_id": null,
+    "expected_cause": "none_identifiable",
+    "acceptable_alternatives": [],
+    "claimed_cause": "none_identifiable",
+    "passed": true,
+    "checks": {
+      "names the expected cause": true,
+      "cites specific figures": true
+    },
+    "failure_notes": [],
+    "extraction": {
+      "secondary_causes": [],
+      "explicitly_ruled_out": [
+        "marketing_spend",
+        "inventory",
+        "pricing",
+        "calendar"
+      ],
+      "confidence": "High",
+      "states_cause_preceded_effect": false,
+      "cites_specific_figures": true,
+      "declares_itself_partial": false,
+      "evidence_quotes": [
+        "On 2025\u201103\u201116 the Home\u202f&\u202fGarden\u202f/\u202fWeb\u202f/\u202fWest slice posted a revenue drop of **\u201114.4\u202f%** (\u2011$315.79) versus its expected $2,191.91.",
+        "Marketing spend \u2013 rose to $186.17 on 2025\u201103\u201116 (up from $129.56 on 2025\u201103\u201114).",
+        "Stockout rate was **0\u202f%** on 2025\u201103\u201116 (no SKUs out of stock)."
+      ],
+      "primary_cause": "none_identifiable"
+    },
+    "tool_calls_used": 7,
+    "tool_calls_rejected": 0,
+    "truncated": false,
+    "results_elided": 0,
+    "stop_reason": "length_retry",
+    "model": "openai/gpt-oss-120b",
+    "elapsed_s": 485.7,
+    "input_tokens": 38547,
+    "output_tokens": 4787,
+    "brief_path": "docs/sample_briefs/eval/DET-0018.md",
+    "investigation_id": "INV-DET-0018-62a010",
+    "provider": "groq:openai/gpt-oss-120b"
+  }
+]

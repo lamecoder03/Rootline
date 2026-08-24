@@ -1,6 +1,6 @@
-# Day 4 — Marts: the allocation rule and the margin gap, and why
+# Marts & Allocation — the allocation rule and the margin gap, and why
 
-Day 3 cleaned the data and deliberately left two decisions unmade, because both are business
+Data reconciliation cleaned the data and deliberately left two decisions unmade, because both are business
 judgements rather than cleaning steps. This is where they get made, and this is the reasoning.
 
 The code is in `dbt/revenue_anomaly/models/marts/` and `models/intermediate/`. This document
@@ -17,7 +17,7 @@ labelled, because a consumer needs to know what they are agreeing to when they r
 Both of today's decisions are assumptions someone could reasonably disagree with, so both live
 here, both are named in the model header, and both are enforced by tests.
 
-Four objects land in `analytics` — the only schema Power BI, the Day 5 detector, and the Day 8
+Four objects land in `analytics` — the only schema Power BI, the detector, and the investigation
 agent are ever pointed at:
 
 | Model | Grain | Rows | Materialisation |
@@ -145,7 +145,7 @@ hidden.
 
 ## Decision 2 — The 8 uncosted SKUs are excluded from the cost basis and counted on every row
 
-Day 3 left 8 of 120 SKUs with a NULL `unit_cost`, deliberately refusing to impute a fabricated
+Data reconciliation left 8 of 120 SKUs with a NULL `unit_cost`, deliberately refusing to impute a fabricated
 cost into a financial metric. That decision was correct, and it left a problem for today: what
 does a margin number mean when 7% of the products behind it have no known cost?
 
@@ -251,7 +251,7 @@ three channels in a region see the same shelf.
 It is a **view** rather than a table because it is an aggregation over 87,720 rows that Postgres
 computes in milliseconds, and freshness matters more than a saved fraction of a second.
 
-Beyond counting stockouts it carries `stocked_out_sku_ids` — the actual SKU list. The Day 8
+Beyond counting stockouts it carries `stocked_out_sku_ids` — the actual SKU list. The
 deliverable is a written brief for a human, and "6 of 8 West Electronics SKUs were out of stock,
 including ELEC-0004 and ELEC-0008" is an actionable sentence in a way that "stockout rate 75%"
 is not.
@@ -264,7 +264,7 @@ Electronics SKUs at zero every day from 9 June to 15 June, then back to zero sto
 
 ## What the tests protect against
 
-191 tests pass, up from 81. The Day 4 additions that carry real weight:
+191 tests pass, up from 81. The additions at this layer that carry real weight:
 
 **`assert_spend_allocation_reconciles`** — the allocation neither creates nor destroys money, to
 the cent, per cell and in total. This is the test that makes the allocation rule safe to build on.
@@ -288,13 +288,13 @@ rules, so a third one cannot appear unannounced.
 
 ## Running it
 
-Unchanged from Day 3 — always through the wrapper, which loads `.env` into the environment:
+Unchanged from the staging layer — always through the wrapper, which loads `.env` into the environment:
 
 ```
 run_dbt.bat build
 ```
 
 Marts land in `analytics`, intermediates in `intermediate`, staging in `staging`. That
-separation is what makes the Day 7 guardrail enforceable: the agent's read-only role gets
+separation is what makes the security guardrail enforceable: the agent's read-only role gets
 granted on `analytics` alone, and `analytics` contains only the four objects a consumer should
 ever read.

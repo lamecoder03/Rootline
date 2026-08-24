@@ -1,10 +1,10 @@
-# Day 7 — Agent guardrails
+# Security & Access Control — agent guardrails
 
-The walls, built before anything exists that could test them. Day 8 adds the Anthropic tool-use
-loop; today's job is to make sure that when it arrives, the worst it can do is read six tables
+The walls, built before anything exists that could test them. The investigation loop comes later;
+this layer's job is to make sure that when it arrives, the worst it can do is read six tables
 and write a log line.
 
-The four guardrails from `CLAUDE.md`, in the order a query meets them:
+The four guardrails, in the order a query meets them:
 
 | # | Guardrail | Enforced by | Stops |
 |---|---|---|---|
@@ -338,8 +338,22 @@ the cost of two rows per call. Given a single-process portfolio agent, one row p
 
 ## 4. The tool-call ceiling
 
-`agent/guardrails/call_budget.py`. `MAX_TOOL_CALLS = 25`, sized from the Day 8 plan (roughly a dozen
-queries to characterise one anomaly, doubled for slack).
+`agent/guardrails/call_budget.py`, reading `MAX_TOOL_CALLS` from `agent/config.py`. **The
+production ceiling is 8**, and it is a measured number rather than an estimated one.
+
+It was first set to 20 — ten queries to characterise an anomaly, doubled for slack, on the
+hypothesis that models re-query after an empty result. **The measurement contradicted that
+hypothesis.** On DET-0008 at a ceiling of 20 (investigation `INV-DET-0008-1f183d`), all 20 calls
+were spent, calls 13–20 re-queried tables already read at calls 1–9 — `detected_anomaly_points`
+four separate times — and the investigation produced no brief at all.
+
+The mechanism is the context window, not impatience. A request must fit
+`fixed overhead + conversation + max_tokens <= 8,000` tokens, so `agent/context_budget.py` elides
+the oldest results once roughly the eighth accumulates. Past that point each new call pushes an
+earlier result out of view, the model notices a figure it needs is gone, and spends the next call
+re-fetching it — which evicts another. **The marginal call beyond ~8 destroys more evidence than
+it adds.** Eight is where the evidence budget and the context budget agree. Full derivation in the
+comment block at `agent/config.py:99-149`.
 
 Two design choices carry the whole guarantee:
 
@@ -351,7 +365,7 @@ between a counter and a cap, and it is what section 5.5 is testing.
 Not charging for failures is precisely how a loop that keeps re-issuing a rejected query runs
 forever.
 
-`BudgetedInvestigation` is the context-manager form for Day 8: it catches the exhaustion exception at
+`BudgetedInvestigation` is the context-manager form used by the investigation loop: it catches the exhaustion exception at
 the boundary and turns it into a clean early exit, so the loop stops and a partial brief ships rather
 than the process crashing. `budget.stopped_reason` is the line the brief prints to say it was cut
 short — a truncated investigation that does not say so is worse than none.
@@ -604,8 +618,8 @@ python -m tests.attack_attempts          # the live attack harness above
 
 All three run from `.venv` (Python 3.14). `provision.py` is idempotent and should be re-run after
 any change to the analytics schema; it is not yet wired into the DAG — `ALTER DEFAULT PRIVILEGES`
-means it does not need to be for a routine `dbt build`, and adding a fourth task is a Day 8+
-decision, not a Day 7 one.
+means it does not need to be for a routine `dbt build`, and adding a fourth task is a later
+orchestration decision, not a guardrail one.
 
 `tests/test_guardrails.py` uses plain asserts and a small runner rather than pytest, because pytest
 is not a dependency of this project and CI is explicitly deferred in the locked scope.

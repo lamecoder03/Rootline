@@ -49,6 +49,33 @@ def build_engine():
     return create_engine(url, future=True)
 
 
+def persist_coverage(engine, coverage, run_id, detected_at):
+    """Writes the per-cell confidence report the detector produced alongside its findings.
+    Separate from persist() because it answers a different question: not "what fired" but
+    "which cells could be judged at all" - the two must not be inferred from each other."""
+    if coverage is None or coverage.empty:
+        return 0
+
+    coverage = coverage.copy()
+    coverage["detection_run_id"] = run_id
+    coverage["detected_at"] = detected_at
+
+    coverage.to_sql(
+        cfg.COVERAGE_TABLE, engine, schema=cfg.OUTPUT_SCHEMA, if_exists="replace", index=False,
+        dtype={"first_observed": Date(), "last_observed": Date(),
+               "pct_scored": Numeric(5, 1)},
+    )
+
+    with engine.begin() as connection:
+        connection.execute(text(
+            f"COMMENT ON TABLE {cfg.OUTPUT_SCHEMA}.{cfg.COVERAGE_TABLE} IS "
+            "'One row per revenue cell: how many of its days the detector could score, and the "
+            "confidence that supports. confidence=none means no anomaly can be ruled in OR out "
+            "for that cell - absence of a detected anomaly is not evidence of normality.'"
+        ))
+    return len(coverage)
+
+
 def persist(engine, episodes, points, run_id, detected_at):
     """Replaces both tables wholesale on every run, exactly like the Day 2 loader.
     Chosen over append-with-history because the detector is deterministic over a fixed window:

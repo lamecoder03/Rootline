@@ -1,4 +1,4 @@
-# Day 3 — Staging layer: how the messy data was cleaned, and why
+# Data Reconciliation — staging layer: how the messy data was cleaned, and why
 
 This is the reasoning behind the dbt staging layer, written to be read on its own. The code
 is in `dbt/revenue_anomaly/models/staging/`; this document explains the decisions the code
@@ -29,7 +29,7 @@ category is spelled, how a date is formatted, and which fields they happen to ha
 for any given product.
 
 **Why this matters downstream, not just aesthetically.** If `Consumer Electronics` and
-`ELECTRONICS` survive as two categories, the Day 5 z-score detector splits one revenue signal
+`ELECTRONICS` survive as two categories, the z-score detector splits one revenue signal
 into two half-sized ones. Each looks less significant than the real combined signal, so the
 detector's control limits are computed on the wrong baseline and it misses the anomaly it
 exists to catch. The cleaning is not tidiness — it is the difference between the detector
@@ -278,14 +278,14 @@ than a quietly wrong number.** All 158 rows parsed successfully.
 
 ---
 
-## Decision 7 — Marketing spend keeps its own grain until Day 4
+## Decision 7 — Marketing spend keeps its own grain until the marts layer
 
 `raw.marketing_spend` is one grain coarser than revenue: it has no `region`. Revenue is
 date × category × channel × region; spend is only date × channel × category.
 
 Staging keeps the source grain and **declares** it, via a surrogate key over exactly those
 three columns and a `unique` test on it. The roll-up that reconciles spend to revenue is
-deliberately deferred to the Day 4 mart.
+deliberately deferred to the marts layer.
 
 **Why.** Splitting one spend number across four regions requires choosing an allocation rule —
 by revenue share, evenly, by population. That is a business assumption, and it materially
@@ -349,7 +349,7 @@ starts dropping rows.
 **`unique` on the md5 surrogate keys** — dbt's built-in `unique` test takes one column, but
 three of these models have composite grains. Each model builds an md5 key over its grain
 columns, which turns "is this grain actually unique?" into a single testable column. It also
-hands Day 4's marts a ready-made join key. This is what `dbt_utils.unique_combination_of_columns`
+hands the marts a ready-made join key. This is what `dbt_utils.unique_combination_of_columns`
 would do; done natively, it costs no dependency.
 
 **Three singular tests** for things generic tests structurally cannot express:
@@ -358,7 +358,7 @@ would do; done natively, it costs no dependency.
   has exactly one survivor, and the dimension has one row per audited SKU. This is the guard
   that makes the 158 → 120 collapse arithmetic, not faith.
 - `assert_revenue_grain_is_complete` — 731 days × 60 cells with no gap in the date sequence. A
-  missing day would read to the Day 5 detector as a revenue collapse, manufacturing an anomaly
+  missing day would read to the detector as a revenue collapse, manufacturing an anomaly
   that never happened.
 - `assert_no_negative_measures` — no negative revenue, orders, units, spend, stock or cost. A
   sign error in a cast is silent and would shift the z-score control limits.
@@ -404,7 +404,7 @@ profile and is not.
 with `--project-dir` and `--profiles-dir` already set. It parses the file natively rather than
 shelling out to a Python helper, so it has no dependency of its own; it anchors every path to
 the repo root, so it runs from any working directory; it propagates dbt's exit code, so a failed
-build still fails a caller such as the Day 6 Airflow task; and it fails with a readable message
+build still fails a caller such as the Airflow `transform` task; and it fails with a readable message
 if `.env`, the venv, or `POSTGRES_PASSWORD` is missing rather than letting dbt fail obscurely.
 
 One Windows detail worth knowing, because it cost a debugging cycle: **cmd.exe silently
@@ -418,7 +418,7 @@ lookups, so the repository holds the shape of the connection and never the crede
 `.gitignore` ignores `profiles.yml` everywhere by default and re-includes this one specific
 file, with a comment saying why.
 
-Staging models land in the `staging` schema, and Day 4's marts will land in `analytics`. dbt's
+Staging models land in the `staging` schema, and the marts land in `analytics`. dbt's
 default behaviour would have produced `analytics_staging` by prefixing the target schema, so
 `macros/generate_schema_name.sql` overrides it to use the custom name verbatim. That keeps the
 boundary clean for the guardrail this project is built around: the agent's read-only role gets

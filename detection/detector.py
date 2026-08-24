@@ -12,6 +12,7 @@ import pandas as pd
 from scipy import stats
 
 from . import config as cfg
+from . import coverage
 
 
 def _load_frame(engine):
@@ -43,9 +44,13 @@ def _pivot(frame):
         .loc[dates, cells]
         .values
     )
+    # fillna(False) before the bool cast: a cell that did not exist on a date leaves a NaN here,
+    # and NaN casts to True. Without this a single newly launched cell marks EVERY day a holiday,
+    # which silently switches the whole series to the widened holiday control limit.
     is_holiday = (
         frame.pivot_table(index="order_date", columns="cell_key", values="is_holiday")
         .loc[dates, cells]
+        .fillna(False)
         .values.astype(bool)
     )
     return pd.DatetimeIndex(dates), cells, log_revenue, is_holiday
@@ -241,7 +246,14 @@ def detect(engine):
             "scale_n": scale_n.ravel(),
             "is_holiday": is_holiday.ravel(),
         }
-    ).dropna(subset=["z_raw"])
+    )
+
+    # Everything dropped here is a day the detector could not score. Recorded before the drop,
+    # because an unscored day is a low-confidence report, not an absence of news.
+    unscored = coverage.classify(dates, cells, log_revenue, baseline_n, scale_n, z_raw)
+    cell_coverage = coverage.summarise(unscored, dates, cells, log_revenue)
+
+    points = points.dropna(subset=["z_raw"])
 
     points, null_centre, null_spread = _calibrate_empirical_null(points)
     points = _confirm(points)
@@ -257,6 +269,8 @@ def detect(engine):
 
     points.attrs["null_centre"] = null_centre
     points.attrs["null_spread"] = null_spread
+    points.attrs["unscored"] = unscored
+    points.attrs["cell_coverage"] = cell_coverage
     return points.sort_values(["order_date", "cell_key"]).reset_index(drop=True)
 
 

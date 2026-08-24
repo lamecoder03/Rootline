@@ -37,7 +37,7 @@ Three things make that harder than it sounds, and each drove a design decision b
 
 ## Approach
 
-Built layer by layer over nine days, each one tested before the next was started.
+Built layer by layer, each one tested before the next was started.
 
 ```mermaid
 flowchart TB
@@ -60,7 +60,7 @@ flowchart TB
 
     subgraph AGT ["agent/ · investigation loop"]
         A["LLM + one tool<br/><b>query_warehouse</b>"]
-        W["<b>Day 7 guardrails</b><br/>sqlglot AST validator<br/>read-only role · row cap · call cap"]
+        W["<b>Security guardrails</b><br/>sqlglot AST validator<br/>read-only role · row cap · call cap"]
     end
 
     G -->|load_to_postgres.py| RAW
@@ -90,11 +90,11 @@ including the ones that were refused.
 
 | Principle | How it shows up |
 |---|---|
-| **Guardrails before capability** | Day 7 built and attacked the walls before Day 8 wrote a single agent call |
+| **Guardrails before capability** | The security layer was built and attacked before the agent wrote a single call against it |
 | **Allowlists, never denylists** | Tables, statement types and SQL functions. The one denylist in the design leaked six functions and was inverted |
 | **State the assumption in the name** | `estimated_gross_margin`, `spend_allocation_basis`, `is_margin_estimable` — an approximation that doesn't announce itself gets quoted as fact |
 | **Evidence over assertion** | Every brief ships with the SQL that produced it; every detection claim is scored against a held-out answer key |
-| **Verified, or it isn't done** | The phase marker in `CLAUDE.md` has never moved on unverified work — including right now |
+| **Verified, or it isn't done** | No layer has been marked done on unverified work — including right now |
 
 ---
 
@@ -139,9 +139,9 @@ Christmas Eve, Christmas Day, and a genuine Q4 revenue ramp.
 ### Cleaning the product master
 
 `raw.product_master` is deliberately dirty — the union of a mock ERP export and a mock Shopify
-export. Day 3 reconciles 158 rows into 120 SKUs by ranking each SKU's duplicates on completeness
-then recency, and taking the first non-null value **per column** rather than picking a winning
-row wholesale.
+export. Data reconciliation merges 158 rows into 120 SKUs by ranking each SKU's duplicates on
+completeness then recency, and taking the first non-null value **per column** rather than picking
+a winning row wholesale.
 
 The losing rows are not discarded. `stg_product_master_dedup_audit` keeps all 158, recording which
 row won and **which specific field each losing row donated** — so the merge is auditable rather
@@ -233,10 +233,10 @@ Orchestration also exposed a latent bug that local runs never would: the loader 
 `to_sql(if_exists="replace")`, which issues `DROP TABLE`. Once staging views select from `raw`,
 Postgres refuses to drop a table with dependents. The loader now truncates and appends.
 
-### Guardrails — four walls, built before the agent
+### Security & Access Control — four walls, built before the agent
 
 An agent that can query a production-shaped database is a security story. These were built and
-attacked on Day 7, before any agent capability existed to test them.
+attacked before any agent capability existed to test them.
 
 **1. A dedicated read-only role.** `revenue_agent` holds `SELECT` on `analytics`, `INSERT` on the
 audit table, and nothing else — no `USAGE` on `raw`, `staging` or `intermediate`, so objects there
@@ -282,8 +282,8 @@ loop past it.
 ### The agent
 
 A hand-written tool-use loop with exactly **one tool**, `query_warehouse`, whose implementation is
-the Day 7 pipeline in order: budget → validate → execute read-only → audit. Day 7's modules are
-imported and called, never reimplemented.
+the security pipeline in order: budget → validate → execute read-only → audit. The guardrail
+modules are imported and called, never reimplemented.
 
 The loop is hand-written rather than an SDK helper because budget exhaustion has to break the loop
 *and still produce output* — the model gets a final turn with the tool removed and is told to
@@ -295,8 +295,8 @@ contract; the loop, the grader and the eval talk only to that, and **no vendor S
 anywhere outside `agent/llm/`**. Three adapters ship: `groq`, `anthropic`, and a generic
 `openai-compatible` one covering Together/OpenRouter/local vLLM by URL alone.
 
-That interface earned itself immediately. The project was built against the Anthropic API; on
-Day 8 the account ran out of credit and the author is a student who cannot fund it. Switching to
+That interface earned itself immediately. The project was built against the Anthropic API; partway
+through, the account ran out of credit and the author is a student who cannot fund it. Switching to
 Groq's free tier cost one adapter and no change to the investigation logic — and, critically,
 **no change to any guardrail**. Verified mechanically: `git status --short agent/guardrails/
 agent/audit/` is empty across the pivot.
@@ -362,7 +362,7 @@ was extended until attempts actually reached the wall.
 
 ### Agent investigation quality
 
-> ### ⏳ [PENDING: Day 8 eval results — 10-scenario run against `gpt-oss-120b`, **0 of 10 scored**]
+> ### ⏳ [PENDING: agent eval results — 10-scenario run against `gpt-oss-120b`, **0 of 10 scored**]
 >
 > **Nothing is reported here yet because nothing has been measured yet.** The eval harness, the
 > answer key and the grader are built and committed; the scored run has not completed.
@@ -380,6 +380,19 @@ was extended until attempts actually reached the wall.
 > The last attempt was stopped mid-way through the first scenario with the quota exhausted, and
 > scored nothing. The harness writes results after every scenario and merges across runs, so the
 > sweep can be completed in batches without losing what it already scored.
+>
+> **Exactly what does not exist yet**, stated plainly so nothing here reads as a missing file
+> rather than unfinished work:
+>
+> | Artifact | Path it will occupy | Status |
+> |---|---|---|
+> | Scored eval results | `docs/sample_briefs/eval_results.json` | **Not created** — no run has completed a scenario |
+> | Generated briefs | `docs/sample_briefs/*.md` | **None** — directory is empty |
+> | Written eval summary | *(no file)* | **Not written** — waiting on the run above |
+>
+> What *does* exist and is committed: the harness (`agent/eval/run_eval.py`), the 10-scenario
+> answer key (`agent/eval/answer_key.py`), and the claim-extracting grader
+> (`agent/eval/grader.py`).
 >
 > **This section will report the real pass rate, the misses, and whether ANOM-02's negative
 > control was handled correctly** — i.e. whether the brief explicitly *rules out* marketing spend
@@ -436,20 +449,18 @@ Airflow UI on `http://localhost:8080`.
 **Two gotchas worth knowing before you start.** Postgres is published on **5433**, not 5432,
 because a native Windows service already owns 5432 on the development machine — and dbt must be
 invoked through `run_dbt.bat`, which loads `.env` into the real process environment, because
-dbt's `env_var()` reads the environment and nothing else populates it from the file. Both are
-documented in full in `CLAUDE.md`.
+dbt's `env_var()` reads the environment and nothing else populates it from the file.
 
 ### Documentation
 
 | Doc | Covers |
 |---|---|
-| `CLAUDE.md` | The persistent source of truth — locked scope, every layer's contract, six hard-won gotchas |
 | `docs/ground_truth_anomalies.md` | The answer key, never loaded into the warehouse |
-| `docs/day3_staging_decisions.md` | Dedupe rule, category standardisation, missing-value policy |
-| `docs/day4_marts_decisions.md` | Spend allocation and the uncosted-SKU decision |
-| `docs/day5_detection_results.md` | Full method and validation |
-| `docs/day7_guardrails.md` | Each guardrail, and the complete attack transcript |
-| `docs/day9_powerbi_connection.md` · `day9_dax_measures.md` · `day9_dashboard_build_guide.md` | Connection, measures with their assumptions, step-by-step build |
+| `docs/data_reconciliation.md` | Dedupe rule, category standardisation, missing-value policy |
+| `docs/marts_and_allocation.md` | Spend allocation and the uncosted-SKU decision |
+| `docs/detection_and_prioritisation.md` | Full method and validation |
+| `docs/security_guardrails.md` | Each guardrail, and the complete attack transcript |
+| `docs/day9_powerbi_connection.md` · `day9_dax_measures.md` · `day9_dashboard_build_guide.md` | Connection, measures with their assumptions, step-by-step build (**not yet built**) |
 
 ---
 

@@ -120,10 +120,11 @@ DENIED_FUNCTIONS = frozenset({
 })
 
 # --- Call ceiling -----------------------------------------------------------------------
-# Hard stop on tool calls per investigation. Sized from the Day 8 plan: roughly a dozen queries
-# to characterise one anomaly, doubled for slack. The cap is not a cost control, it is a
-# termination guarantee — a model that loops on a failing query stops rather than runs forever.
-MAX_TOOL_CALLS = 25
+# Hard stop on tool calls per investigation: a termination guarantee, not a cost control — a model
+# that loops on a failing query stops rather than runs forever. The live value is measured, not
+# estimated, and is defined once in agent/config.py; every caller reads it from there.
+# Re-exported here so this file still states the whole boundary in one place.
+from agent.config import MAX_TOOL_CALLS  # noqa: E402  (value: 8 — see agent/config.py:99-149)
 
 # --- Names the provisioner and the audit writer share ------------------------------------
 AGENT_ROLE_ENV_USER = "AGENT_DB_USER"

@@ -54,16 +54,23 @@ final as (
                 )
         end                                                     as estimated_gross_margin_pct,
 
-        category_cost_basis.is_margin_estimable,
-        category_cost_basis.is_fully_costed                     as cost_basis_is_complete,
-        category_cost_basis.skus_in_category,
-        category_cost_basis.skus_with_unit_cost,
-        category_cost_basis.skus_excluded_from_cost_basis,
+        -- coalesced to FALSE, never left NULL: a category with no cost basis at all is
+        -- definitively not margin-estimable, and a NULL flag would read as "unknown" on a
+        -- question that has a known answer.
+        coalesce(category_cost_basis.is_margin_estimable, false)  as is_margin_estimable,
+        coalesce(category_cost_basis.is_fully_costed, false)      as cost_basis_is_complete,
+        coalesce(category_cost_basis.skus_in_category, 0)         as skus_in_category,
+        coalesce(category_cost_basis.skus_with_unit_cost, 0)      as skus_with_unit_cost,
+        coalesce(category_cost_basis.skus_excluded_from_cost_basis, 0)
+                                                                  as skus_excluded_from_cost_basis,
         category_cost_basis.cost_basis_coverage_pct,
         category_cost_basis.excluded_sku_ids
 
+    -- LEFT, not INNER: a category with no costed SKUs yet (a new launch) must still appear with
+    -- its revenue and a NULL margin. An inner join drops it silently, and a category missing
+    -- from the margin fact reads as zero margin rather than as unknown margin.
     from revenue
-    inner join category_cost_basis
+    left join category_cost_basis
         on revenue.category = category_cost_basis.category
 
 )

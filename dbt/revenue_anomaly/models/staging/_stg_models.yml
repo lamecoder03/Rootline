@@ -26,16 +26,22 @@ models:
           - not_null
 
       - name: category
-        description: "Product category. Already canonical in this source; tested to keep it that way."
+        description: >
+          Product category. Already canonical in this source; tested to keep it that way.
+          'Wearables' is the newly launched category used by the sparse-history scenario: it has
+          ~3 weeks of revenue and no SKUs in the product master yet, which is why the
+          relationships test below tolerates it explicitly rather than being relaxed.
         data_tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['Electronics', 'Apparel', 'Home & Garden', 'Sports', 'Beauty']
+                values: ['Electronics', 'Apparel', 'Home & Garden', 'Sports', 'Beauty', 'Wearables']
           - relationships:
               arguments:
                 to: ref('stg_product_master')
                 field: category
+              config:
+                where: "category <> 'Wearables'"
 
       - name: channel
         data_tests:

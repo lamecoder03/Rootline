@@ -1,5 +1,9 @@
 # Day 9 — Connecting Power BI Desktop to the warehouse
 
+> **NOT YET BUILT — prep work only, dashboard not implemented.** The database side (the
+> `revenue_reporting` role) is provisioned and verified; the `.pbix` file described here does
+> not exist yet.
+
 How Power BI Desktop reaches the `analytics` marts, which login it uses, and why that login
 exists at all. The dashboard itself is built by hand from
 `docs/day9_dashboard_build_guide.md`; this document is the connection layer underneath it.
@@ -64,7 +68,7 @@ findstr REPORTING_DB .env
 
 ### Why `localhost:5433` and not `postgres:5432`
 
-This is CLAUDE.md's fourth gotcha seen from a third angle. **Power BI Desktop is a Windows
+This is the host/container split seen from a third angle. **Power BI Desktop is a Windows
 application running on the host, not a container**, so it reaches Postgres exactly the way the
 loader and `run_dbt.bat` do — through the port the compose file publishes to the host.
 
@@ -128,7 +132,7 @@ Import exactly these six, all in the `analytics` schema:
 | `detected_anomalies` | one incident | 44 | The anomaly overlay and severity breakdown |
 | `detected_anomaly_points` | flagged cell-day | 166 | Per-day evidence behind each incident |
 
-Those counts are the contract in CLAUDE.md, and the provisioner verifies them on every run.
+Those counts are the project's data contract, and the provisioner verifies them on every run.
 
 **There is nothing else to choose from, by construction.** `raw`, `staging` and `intermediate`
 are not merely unselected — `revenue_reporting` has no `USAGE` on those schemas, so they do not
