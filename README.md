@@ -43,26 +43,6 @@ recommends nothing; that abstention path is demonstrated on a real transcript, n
 | 7 | Feedback loop | [`agent/feedback.py`](agent/feedback.py), [`docs/aic_feedback_loop.md`](docs/aic_feedback_loop.md) |
 | 8 | Security, cost, latency, scale | [`agent/guardrails/`](agent/guardrails/), [`docs/aic_runtime_telemetry.md`](docs/aic_runtime_telemetry.md), [`docs/aic_rbac_scenario.md`](docs/aic_rbac_scenario.md) |
 
-**Eval status: 5 of 10 scenarios scored, 2 passed** — throughput-limited by the free-tier quota at
-~4 investigations/day, measured and reported in
-[`docs/aic_runtime_telemetry.md`](docs/aic_runtime_telemetry.md) rather than estimated.
-
----
-
-## Why this is hard
-
-Three things make this harder than charting a dip, and each drove a design decision below:
-
-1. **A real incident can be invisible in the total.** The largest injected event in this dataset
-   touches 3 of 60 category × channel × region cells. Aggregate the series and it disappears
-   into noise, so detection runs per cell, never on a total.
-2. **The obvious explanation is usually the wrong one.** Marketing spend correlates with revenue
-   at roughly 0.85 across this business by construction. An investigator that reaches for spend
-   every time will be confidently wrong on any incident that isn't a spend problem.
-3. **An agent that can query the warehouse is a security story.** Anything that turns model
-   output into SQL against a production-shaped database needs walls that exist before the
-   capability does.
-
 ---
 
 ## Approach
@@ -127,16 +107,6 @@ flowchart TB
 The two red boxes are the point of the design: **there is no path from the agent to the warehouse
 that does not go through the validator, and no tool call that does not land in the audit log** —
 including the ones that were refused.
-
-### Design principles held throughout
-
-| Principle | How it shows up |
-|---|---|
-| **Guardrails before capability** | The security layer was built and attacked before the agent wrote a single call against it |
-| **Allowlists, never denylists** | Tables, statement types and SQL functions. The one denylist in the design leaked six functions and was inverted |
-| **State the assumption in the name** | `estimated_gross_margin`, `spend_allocation_basis`, `is_margin_estimable` — an approximation that doesn't announce itself gets quoted as fact |
-| **Evidence over assertion** | Every brief ships with the SQL that produced it; every detection claim is scored against a held-out answer key |
-| **Verified, or it isn't done** | No layer is marked complete on unverified work, and unfinished work is named as unfinished |
 
 ---
 
@@ -319,7 +289,9 @@ The grant is tight enough that `INSERT … RETURNING` fails, because `RETURNING`
 which the writer doesn't have. That's the grant working, not an omission.
 
 **4. A hard tool-call ceiling** that raises rather than counts, so a caller that ignores it cannot
-loop past it.
+loop past it. It is set to 8 by measurement, not by cost: past roughly eight results the oldest
+are elided to fit the context window, and the agent spends the next call re-fetching a figure it
+already had — the marginal call destroys more evidence than it adds.
 
 ### The agent
 
@@ -398,40 +370,12 @@ The chain was then re-verified end to end through the new Groq adapter with ever
 by the live model: 7 tool calls attempted, 6 executed, 1 refused by the validator, the call cap
 fired on cue, 7 audit rows written, all under `db_role = revenue_agent`.
 
-One methodological note: the model **self-refused 5 of 7 attack prompts** before the validator
-ever saw them. Model reluctance is defence in depth, not evidence that the wall holds — so the
-probe set was extended until attempts actually reached it.
+### Sample output
 
-### Agent investigation quality
-
-Scored against a 10-scenario answer key: the 3 ground-truth anomalies transcribed from
-`docs/ground_truth_anomalies.md`, plus 7 detected episodes whose expected conclusions were fixed
-from raw evidence **before any brief was generated** — the agent does not get to write the
-standard it is graded against. The grader extracts structured claims by forced tool call and
-compares them mechanically, so no pass/fail rests on a model's opinion of "close enough".
-
-**5 of 10 scenarios scored so far; 2 passed.** The remainder is a throughput limit rather than a
-blocked feature: the free tier meters 8,000 tokens/minute and 200,000 per rolling 24 hours, and
-one investigation costs ~47,000 tokens, so the quota sustains roughly four per day. Results are
-written after every scenario and merged across runs, so the sweep completes in batches without
-losing what it already scored.
-
-**Diagnosis is stronger than the pass rate suggests: 4 of the 5 named the correct primary cause.**
-Failures concentrate in rubric completeness — explicitly restating a ruled-out cause, or stating
-that the cause preceded the effect — not in reaching the wrong answer. The negative control was
-handled correctly: on the stockout the brief named inventory and *explicitly ruled out* marketing
-spend with figures ($108.35/day before, $107.77/day during) rather than inventing a spend story.
-The one wrong headline was an abstention, not a fabrication — it queried spend only for dates
-before the incident window, so it declined to name a cause it had no evidence for.
-
-Raw results: `docs/sample_briefs/eval_results.json`. Generated briefs: `docs/sample_briefs/eval/`.
-
-One measured finding already recorded, because it changed the design: at a 20-call ceiling the
-agent spent all 20 calls and re-queried tables it had already read, then produced no brief at all.
-The cause is the context window — past roughly eight results the oldest are elided to fit, the
-model notices a figure it needs is gone, and spends the next call re-fetching it, which evicts
-another. **The marginal call beyond ~8 destroys more evidence than it adds.** The ceiling is now 8,
-justified by that measurement rather than by cost.
+Five investigated briefs, each with its evidence trail and the SQL that produced it, are in
+[`docs/sample_briefs/eval/`](docs/sample_briefs/eval/). The negative control is the one to read:
+on the stockout the brief names inventory and *explicitly rules out* marketing spend with figures
+($108.35/day before, $107.77/day during) rather than inventing a spend story.
 
 ---
 
@@ -483,57 +427,3 @@ dbt's `env_var()` reads the environment and nothing else populates it from the f
 | `docs/aic_rbac_scenario.md` | Role-based access: the three identities and what each may reach |
 | `docs/aic_llm_vs_nonllm_breakdown.md` | Which layers use a model, and which deliberately do not |
 | `docs/aic_sparse_history_scenario.md` | Behaviour on a newly launched cell with 21 days of history |
-
----
-
-## Roadmap and known limitations
-
-**Detection**
-
-- **Run STL decomposition alongside the z-score and compare on the same answer key.** It was
-  scoped as a fallback and never needed — but "we didn't need it" is weaker than "we ran both and
-  here is the difference."
-- **Widen severity beyond `peak_z_score`.** Measured across the 44 episodes, the Critical band
-  (8 episodes, $83.7k absolute impact) and the High band (16, $85.2k) carry near-identical dollar
-  impact. z measures distance from normal, not money. A severity score blending magnitude,
-  duration and dollars would rank better.
-- **More anomaly archetypes** — pricing errors, competitor entry, a data-quality outage that looks
-  exactly like a revenue collapse. The last one is the most valuable, because it is the failure
-  mode most likely to produce a confident, wrong brief.
-
-**Agent**
-
-- **Re-run the eval on a frontier model** and report both. The free-tier constraint is real and
-  documented, but the honest comparison is "here is what capability costs," not "here is the free
-  answer."
-- **Give the investigation a working memory.** The 8-call ceiling is imposed by an 8k context
-  window, not by what the analysis needs. With a larger budget the agent could keep an evidence
-  ledger and stop re-querying what it has already seen.
-- **Self-consistency on the conclusion** — run the investigation three times and report agreement.
-  A cause named identically three times from three independent paths is worth more than one
-  confident brief.
-
-**Platform**
-
-- **CI.** Deliberately deferred in the documented scope, and the highest-value addition: run the 191 dbt
-  tests, the 22 guardrail unit tests and the attack harness on every push. The attack harness in
-  particular is exactly the kind of thing that rots silently.
-- **Incremental dbt models.** The pipeline rebuilds all 43,860 rows every run. Fine at this size,
-  wrong at any real one.
-- **Data-quality monitoring on the raw layer** — a source freshness or row-count check, so a
-  pipeline that silently ingests half a day's orders is caught before the detector reports it as
-  a revenue collapse.
-- **Deliver the brief where people are** (Slack/email). Explicitly out of scope here — a brief
-  nobody reads has the same value as no brief, but delivery is plumbing next to the analysis.
-- **SCD-2 snapshots on the product master**, so a SKU changing category doesn't silently rewrite
-  history.
-
-**Honest limitations of what exists**
-
-- Everything is synthetic. The cleaning problems are realistic but *curated*; real source data
-  fails in ways nobody anticipated.
-- 60 cells is small. At thousands, the cross-sectional common-factor step and per-cell scoring
-  both need re-thinking for cost.
-- The agent reads six pre-modelled tables. It cannot ask a question the marts don't already
-  answer — which is a real ceiling on root-cause analysis, and a deliberate trade against letting
-  it roam the warehouse.
