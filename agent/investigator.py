@@ -18,7 +18,7 @@ from .guardrails.db import build_agent_engine
 from .llm import AssistantTurnRef, ToolResult, ToolResultsTurn, ToolSpec, UserTurn
 from .tools.query_warehouse import TOOL_DEFINITION, TOOL_NAME, WarehouseTool
 
-# The Day 7 tool definition, restated in the neutral shape. Same name, same description, same
+# The original tool definition, restated in the neutral shape. Same name, same description, same
 # schema - only the wrapper changes, so nothing about what the model may ask for is re-specified.
 WAREHOUSE_TOOL = ToolSpec(
     name=TOOL_DEFINITION["name"],
@@ -58,7 +58,7 @@ class Investigation:
 
 def investigate(anomaly, provider=None, max_calls=None, verbose=True):
     """One anomaly in, one brief out. The budget, validator, read-only engine and audit log are
-    Day 7's, imported and used as-is; this function only wires them into the model's turn cycle."""
+    imported from the guardrail layer and used as-is; this function only wires them into the model's turn cycle."""
     provider = provider or cfg.build_provider()
     investigation_id = f"INV-{anomaly['anomaly_key']}-{uuid.uuid4().hex[:6]}"
 

@@ -276,7 +276,7 @@ def detect(engine):
 
 def to_episodes(points):
     """Collapses consecutive flagged days in one cell into a single incident, because a
-    seven-day stockout is one thing that happened, not seven. The episode is the unit the Day 8
+    seven-day stockout is one thing that happened, not seven. The episode is the unit the agent
     agent investigates and the unit the validation scores detection lag against."""
     flagged = points[points.is_anomaly].sort_values(["cell_key", "order_date"])
     episodes = []

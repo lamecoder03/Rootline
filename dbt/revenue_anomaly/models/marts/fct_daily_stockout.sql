@@ -1,4 +1,4 @@
--- Daily stock health at date x category x region -- the inventory evidence the Day 8 agent
+-- Daily stock health at date x category x region -- the inventory evidence the agent
 -- checks when revenue drops and marketing spend cannot account for it.
 -- Exists because ANOM-02 has no spend footprint by design, so inventory is the only table that
 -- can explain it; this rolls SKU-level stock up to a grain fct_daily_revenue joins to directly.

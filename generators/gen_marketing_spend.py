@@ -1,5 +1,5 @@
 # Generates daily marketing spend at the date x channel x category grain — one grain
-# coarser than revenue, as real budgets are, so Day 3's dbt layer has to aggregate to join.
+# coarser than revenue, as real budgets are, so the dbt staging layer has to aggregate to join.
 # Spend is sized against the same seasonal signal revenue uses, then blurred with smoothed
 # noise and monthly budget steps, so the two correlate realistically rather than perfectly.
 

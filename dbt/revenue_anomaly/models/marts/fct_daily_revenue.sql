@@ -1,5 +1,5 @@
--- The core revenue fact at date x category x channel x region -- what Day 5's detector scans
--- and the Day 8 agent queries first when it is asked why revenue moved.
+-- The core revenue fact at date x category x channel x region -- what the detector scans
+-- and the agent queries first when it is asked why revenue moved.
 -- Exists so revenue, region-allocated marketing spend and calendar context sit on one grain,
 -- letting a single row answer "what happened, and what was going on around it".
 -- Every join is one-to-one or many-to-one: the product dimension is pre-aggregated to category

@@ -1,5 +1,5 @@
-# Loads every generator CSV into the Postgres `raw` schema — the ingest step the Day 6
-# Airflow DAG will call. Credentials come from .env, never from source.
+# Loads every generator CSV into the Postgres `raw` schema — the ingest step the
+# Airflow DAG calls. Credentials come from .env, never from source.
 # Each file lands in its own table, replaced in full on every run, so the load is idempotent.
 # Date columns are typed as DATE; deliberately messy columns stay TEXT for dbt to clean.
 
@@ -18,7 +18,7 @@ CHUNK_SIZE = 10_000
 
 # Source file -> target table, with the columns that should land as real DATEs.
 # product_master's launch_date_raw is missing on purpose: it arrives in two different
-# string formats and reconciling it is Day 3's staging work, not the loader's.
+# string formats and reconciling it is the staging layer's work, not the loader's.
 LOAD_PLAN = (
     ("daily_revenue.csv", "daily_revenue", ("order_date",)),
     ("marketing_spend.csv", "marketing_spend", ("spend_date",)),

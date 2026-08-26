@@ -31,7 +31,7 @@ def _require(*keys):
 
 def _url(user, password):
     """URL.create escapes the credentials, so a password containing @ or : cannot corrupt the
-    DSN - the same reason the Day 2 loader builds its URL this way rather than by formatting."""
+    DSN - the same reason the ingest loader builds its URL this way rather than by formatting."""
     _load_env()
     return URL.create(
         drivername="postgresql+psycopg2",

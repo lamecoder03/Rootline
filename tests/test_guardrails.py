@@ -140,9 +140,9 @@ def test_cast_and_case_are_syntax_not_functions():
 @case
 def test_boolean_connectives_are_syntax_not_functions():
     """sqlglot models AND and OR as Func subclasses, so an allowlist that does not exempt them
-    rejects every compound WHERE clause. Day 8 hit this on its first real query: the agent's
+    rejects every compound WHERE clause. The agent hit this on its first real query: the agent's
     `WHERE category = 'Electronics' AND region = 'West'` came back as
-    `Function and() is not on the allowlist`. The Day 7 regression set missed it because none of
+    `Function and() is not on the allowlist`. The original regression set missed it because none of
     its queries had two conditions - so these assert the operator forms explicitly."""
     T = "analytics.fct_daily_revenue"
     S = "analytics.fct_daily_stockout"
@@ -167,7 +167,7 @@ def test_boolean_connectives_are_syntax_not_functions():
 
 @case
 def test_legitimate_analyst_queries_still_pass():
-    """The regression set. An over-tight function allowlist fails silently at Day 8 rather than
+    """The regression set. An over-tight function allowlist fails silently once the agent runs rather than
     loudly here, so every shape the agent is expected to write is asserted up front.
     Note the sqlglot renames: to_char parses as TimeToStr, date_trunc as TimestampTrunc,
     string_agg as GroupConcat - listing the Postgres spelling in config would not permit them."""

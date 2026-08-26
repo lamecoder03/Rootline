@@ -1,7 +1,7 @@
 # Which LLM, how many turns, how big a brief - separate from the guardrail boundary in
 # agent/guardrails/config.py, which this file must never reach into.
 # Exists so a provider switch is a value change here plus an adapter under agent/llm/, and the
-# investigation logic, the tool, and every Day 7 guardrail stay untouched.
+# investigation logic, the tool, and every guardrail stay untouched.
 
 import os
 
@@ -98,7 +98,7 @@ REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "medium")
 
 # --- The production tool-call ceiling ---------------------------------------------------
 #
-# Day 7's harness used 5. That was a number chosen to make the cap fire inside a test, not an
+# An earlier harness used 5. That was a number chosen to make the cap fire inside a test, not an
 # estimate of what an investigation needs, and reusing it would abort every real run.
 #
 # Derived instead from the evidence a brief has to cite, one query each unless noted:
@@ -159,8 +159,8 @@ def build_http_client():
 
     AVG's root omits the `critical` flag on its basicConstraints extension, and Python 3.13+
     turns on OpenSSL's VERIFY_X509_STRICT by default, which rejects that as malformed - the same
-    'Basic Constraints of CA cert not marked critical' error that blocked the dbt 1.12 install on
-    Day 3. Clearing that one flag tolerates the non-conformant encoding while leaving chain
+    'Basic Constraints of CA cert not marked critical' error that blocked the dbt 1.12 install
+    earlier in this project. Clearing that one flag tolerates the non-conformant encoding while leaving chain
     verification and hostname checking fully on. `verify=False` would be the unacceptable
     version of this fix; the connection carries an API key.
     """

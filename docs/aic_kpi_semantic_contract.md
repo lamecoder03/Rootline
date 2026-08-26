@@ -156,7 +156,7 @@ Monday, Christmas Eve) fired **zero**.
 **There is no `severity` column, deliberately.** z measures distance from normal, not money.
 Measured across the 44 episodes, the Critical band (8 episodes, $83.7k) and High band (16,
 $85.2k) carry near-identical dollar impact. Any severity banding is a **presentation-layer**
-decision and is defined in `docs/day9_dax_measures.md`, not in the warehouse.
+decision and is defined in `docs/dax_measures.md`, not in the warehouse.
 
 ---
 

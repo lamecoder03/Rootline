@@ -1,10 +1,10 @@
-# Day 9 — DAX measure reference
+# DAX measure reference
 
 > **NOT YET BUILT — prep work only, dashboard not implemented.** These measures are specified
 > but not yet entered into a `.pbix` file.
 
 Every measure the dashboard needs, with the assumption it rests on stated next to it. This is
-the Day 4 `estimated_` prefix discipline carried into the BI layer: a measure whose name does
+the `estimated_` prefix discipline carried into the BI layer: a measure whose name does
 not admit its approximation will be quoted as fact by whoever reads the dashboard.
 
 Two rules govern everything below.
@@ -123,7 +123,7 @@ Return on Ad Spend = DIVIDE ( [Total Revenue], [Marketing Spend] )
 
 **Assumption stated, and it matters more than it looks.** `marketing_spend_usd` in
 `fct_daily_revenue` is **allocated, not observed**. Source spend is one grain coarser than
-revenue — it has no region — so Day 4 splits each date × channel × category figure across
+revenue — it has no region — so the marts layer splits each date × channel × category figure across
 regions by that region's **trailing 28-day revenue share, excluding the current day**.
 
 Consequences for anyone reading a spend visual:
@@ -169,7 +169,7 @@ DIVIDE (
 )
 ```
 
-Keep `Estimated` in the measure names. It is not verbosity — it is the same reason the Day 4
+Keep `Estimated` in the measure names. It is not verbosity — it is the same reason the marts layer
 columns carry the prefix, and a measure called `Gross Margin %` on a dashboard will be read as
 audited financial truth.
 
@@ -202,7 +202,7 @@ The 8 uncosted SKUs were already excluded from the cost basis upstream, at build
 that genuinely happened. There is no filter that can retroactively remove them, and one that
 appeared to would be lying.
 
-So the correct treatment is **disclosure, not filtering** — which is exactly what the Day 4
+So the correct treatment is **disclosure, not filtering** — which is exactly what the marts layer
 design intended by counting the exclusion on every margin row.
 
 ### The disclosure measures
@@ -283,7 +283,7 @@ Totals today: **44 episodes** (26 drops, 18 spikes), spanning 2024-04-13 to 2025
 
 **There is no `severity` column in the warehouse.** The detector emits `peak_z_score`,
 `min_q_value` and `total_revenue_delta_usd`; "severity" is a presentation-layer banding, and
-stating that is the whole point of this section. The thresholds below are anchored to Day 5's
+stating that is the whole point of this section. The thresholds below are anchored to the detector's
 actual control limits rather than chosen for roundness:
 
 - **|z| ≥ 3** is the ordinary-day control limit.

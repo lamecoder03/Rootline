@@ -49,7 +49,7 @@ def load_previous():
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Run the Day 8 agent eval.")
+    parser = argparse.ArgumentParser(description="Run the agent eval.")
     parser.add_argument("--only", action="append", dest="only",
                         help="Restrict to these anomaly keys; repeatable.")
     parser.add_argument("--source", choices=["ground_truth", "operator"], default=None,

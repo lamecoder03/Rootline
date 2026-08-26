@@ -1,4 +1,4 @@
-# Declares the five raw tables the Day 2 loader lands, so models reach them through
+# Declares the five raw tables the ingest loader lands, so models reach them through
 # {{ source(...) }} instead of a hardcoded schema name.
 # Exists so dbt's lineage graph starts at the real ingest boundary and a schema rename is a
 # one-file change rather than a search-and-replace across every model.

@@ -1,4 +1,4 @@
-# Entry point for the detector - the `detect` step the Day 6 Airflow DAG will call.
+# Entry point for the detector - the `detect` step the Airflow DAG will call.
 # Exists so the whole method runs from one command, reproducibly, and reports what it wrote.
 # Scores every cell-day, groups flagged days into incidents, and replaces the two output tables.
 

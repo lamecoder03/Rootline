@@ -2,13 +2,13 @@
 # Exists so the synthetic-data step reproduces from a clean clone with `pip install -r`.
 # faker/holidays fabricate realistic values, pandas shapes them, sqlalchemy+psycopg2 load
 # them into the Postgres `raw` schema, python-dotenv supplies credentials.
-# scipy supplies the t-distribution used by the Day 5 detector's hypothesis test; the
+# scipy supplies the t-distribution used by the detector's hypothesis test; the
 # baseline has only ~8 same-weekday observations, so a normal approximation understates
 # the tails badly (p=0.0027 vs 0.0199 at |z|=3) and would inflate false positives.
-# sqlglot parses every query the Day 7 agent guardrail inspects. An AST is the point: a
+# sqlglot parses every query the agent guardrail inspects. An AST is the point: a
 # keyword blocklist cannot see a DROP hidden behind a second statement and false-positives on
 # a column honestly named delete_reason.
-# openai is the client for the Day 8 agent's LLM calls. It is here rather than `groq` because
+# openai is the client for the agent's LLM calls. It is here rather than `groq` because
 # Groq is reached through its OpenAI-compatible endpoint, so the same client also covers Together,
 # OpenRouter and a local vLLM — see agent/llm/openai_compat.py. anthropic keeps the alternative
 # adapter runnable, which is what makes "switching back is one env var" a checkable claim.

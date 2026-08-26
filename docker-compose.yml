@@ -27,7 +27,7 @@ services:
 
   # Single-container Airflow: scheduler, API server and triggerer in one `airflow standalone`
   # process. One linear three-task DAG does not justify a Celery/Redis deployment, and the
-  # locked scope excludes one. Metadata lives in the Postgres already running here.
+  # documented scope excludes one. Metadata lives in the Postgres already running here.
   airflow:
     build:
       context: .

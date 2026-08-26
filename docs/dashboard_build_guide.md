@@ -1,11 +1,11 @@
-# Day 9 — Building the dashboard in Power BI Desktop
+# Building the dashboard in Power BI Desktop
 
 > **NOT YET BUILT — prep work only, dashboard not implemented.** This is a step-by-step guide
 > to follow, not a record of a finished build. No `.pbix` exists yet.
 
 A step-by-step build, to be followed by hand in the Power BI Desktop GUI. Connection details are
-in `docs/day9_powerbi_connection.md`; every measure referenced here is defined in
-`docs/day9_dax_measures.md`.
+in `docs/powerbi_connection.md`; every measure referenced here is defined in
+`docs/dax_measures.md`.
 
 **What this dashboard is for.** The project's founding decision is that the deliverable is the agent's
 written brief, not the dashboard — *"the dashboard exists so a human can sanity-check the
@@ -20,7 +20,7 @@ seconds. A visual that cannot do that is decoration, however good it looks.
 
 ## Step 1 — Load the data
 
-Follow `docs/day9_powerbi_connection.md` steps 1–6. In summary: `localhost:5433`,
+Follow `docs/powerbi_connection.md` steps 1–6. In summary: `localhost:5433`,
 `revenue_anomaly`, **Import**, credentials on the Database tab as `revenue_reporting` with
 *Encrypt connection* unticked, and the six `analytics` tables selected.
 
@@ -65,12 +65,12 @@ You have **three fact tables at three different grains** and no dimensions:
 Two facts share a grain; the third is one dimension coarser. You cannot relate facts directly to
 each other — a relationship between `fct_daily_revenue` and `fct_daily_margin` on any single
 column is many-to-many and will silently produce wrong totals. Facts relate to **shared
-dimensions**, never to each other. That is the star schema Day 4 built, and it has to be
+dimensions**, never to each other. That is the star schema the marts layer built, and it has to be
 reconstructed here because Postgres marts do not carry the relationships with them.
 
 ### 2b. Create the date table
 
-Exactly as in `docs/day9_dax_measures.md` — *Modeling → New table*, paste the `Date =` definition,
+Exactly as in `docs/dax_measures.md` — *Modeling → New table*, paste the `Date =` definition,
 then *Table tools → Mark as date table → Date*. Set `Month` to sort by `MonthStart` and
 `DayOfWeek` by `DayOfWeekNo`.
 
@@ -144,7 +144,7 @@ and a domain, so autodetect may propose joining them.
 
 **Joining `dim_product` to a fact on `category` fans the fact out.** `dim_product` is at SKU
 grain: there are 32 Electronics SKUs. Relating it to a category-grain fact repeats every
-Electronics revenue row 32 times, and total revenue jumps by roughly 24× overall. Day 4 has a
+Electronics revenue row 32 times, and total revenue jumps by roughly 24× overall. The marts layer has a
 dedicated dbt test for exactly this — `assert_marts_do_not_inflate_revenue` — because it is the
 classic star-schema failure and it produces numbers that look plausible until someone checks a
 total.
@@ -165,7 +165,7 @@ If Power BI has auto-created a `dim_product` → fact relationship on load, dele
 
 ## Step 3 — Create the measures
 
-Create every measure from `docs/day9_dax_measures.md`. Put them in one place: create an empty
+Create every measure from `docs/dax_measures.md`. Put them in one place: create an empty
 table (*Enter data*, name it `_Measures`, load one dummy column, delete the column) and set each
 measure's Home Table to it. Measures scattered across fact tables become unfindable at about
 fifteen.
@@ -174,7 +174,7 @@ Build them in this order, checking as you go:
 
 1. `Total Revenue` — verify **$101,656,971.77**
 2. `Total Units`, `Total Orders`, `Average Order Value`, `Revenue per Unit`
-3. `Marketing Spend` — verify **$9,779,277.61**, the Day 4 allocation total
+3. `Marketing Spend` — verify **$9,779,277.61**, the allocation total
 4. `Estimated Gross Margin`, `Estimated Gross Margin %` — verify **35.37%**
 5. `Cost Basis Coverage %`, `SKUs Excluded from Cost Basis` (**8**), `Margin Caveat`
 6. `Anomaly Count` (**44**), `Anomalies - Drops` (**26**), `Anomalies - Spikes` (**18**)
@@ -252,7 +252,7 @@ separates a discount-driven revenue lift (revenue up, margin % down) from genuin
 **Why the caveat is non-negotiable here.** `cost_basis_is_complete` is `FALSE` on all 43,860
 margin rows — no category has a complete cost basis. A margin percentage on a dashboard is read
 as a financial fact within about two seconds. If the only disclosure lives in a markdown file
-nobody opens, the dashboard is misleading by omission, which is the failure mode the Day 4
+nobody opens, the dashboard is misleading by omission, which is the failure mode the marts layer
 `estimated_` prefixes exist to prevent.
 
 ---
@@ -375,7 +375,7 @@ sliced total, and only a deliberate check finds it.
   read as a performance report. It is a verification tool for a brief; a headline number nobody
   is going to act on is a distraction with a strong claim to attention.
 - **No forecasting or trend line.** The detector already produces a counterfactual —
-  `expected_revenue` — that is derived from the documented Day 5 method and validated against
+  `expected_revenue` — that is derived from the documented detection method and validated against
   ground truth. A Power BI trend line would be a *second, different, untested* expectation on the
   same chart, and where the two disagree the reader has no way to know which to believe.
 - **No SKU-level revenue drill-through.** It does not exist in the data. The facts stop at

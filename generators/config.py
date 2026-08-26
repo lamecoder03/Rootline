@@ -96,7 +96,7 @@ class Anomaly:
 
 
 # The three injected anomalies. Deliberately different in shape and scope: a short sharp
-# spike, a narrow deep dip, and a slow two-week decay — so Day 5 detection is tested
+# spike, a narrow deep dip, and a slow two-week decay — so detection is tested
 # against easy, medium, and hard cases rather than three of the same thing.
 ANOMALIES = (
     Anomaly(

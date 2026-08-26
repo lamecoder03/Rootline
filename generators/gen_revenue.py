@@ -108,7 +108,7 @@ def build_revenue():
 def build_ground_truth(revenue):
     """Collapses the injected events into a per-day answer key: counterfactual revenue,
     realised revenue, and the exact dollar and percentage gap between them.
-    Day 5's detector is scored against this, so it is written to docs/, never to Postgres."""
+    The detector is scored against this, so it is written to docs/, never to Postgres."""
     injected = revenue[revenue["_anomaly_id"].notna()]
     daily = (
         injected.groupby(["_anomaly_id", "order_date"], as_index=False)

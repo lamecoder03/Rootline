@@ -1,7 +1,7 @@
 # Creates `revenue_reporting`, the read-only login Power BI Desktop connects as.
 # Exists because a human's BI tool and an autonomous agent are two different consumers of the
 # same marts, and giving them one shared login makes "who read this?" unanswerable in the logs.
-# Same least-privilege shape as Day 7's revenue_agent, deliberately NOT the same role.
+# Same least-privilege shape as the guardrail layer's revenue_agent, deliberately NOT the same role.
 # Run as the owner: python -m dashboards.provision_reporting [--verify]
 
 from __future__ import annotations
@@ -132,7 +132,7 @@ def provision(verbose=True):
 def verify():
     """Proves the boundary by using it, not by re-reading the grants that created it.
 
-    Day 7's lesson applied to the second consumer: `GRANT` succeeding says nothing about what was
+    The guardrail lesson applied to the second consumer: `GRANT` succeeding says nothing about what was
     left reachable. Every line below is a live attempt over the reporting role's own connection.
     """
     role, _ = reporting_credentials()

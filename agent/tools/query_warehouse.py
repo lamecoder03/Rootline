@@ -1,7 +1,7 @@
 # The agent's one tool: run a SELECT against the six allowlisted analytics tables.
 # Exists as the single hole in the wall - every other capability the model has is reasoning, so
 # this file is the entire attack surface and is deliberately short enough to read in one sitting.
-# Implementation is Day 7's pipeline in order: budget -> validate -> execute read-only -> audit.
+# Implementation is the guardrail pipeline in order: budget -> validate -> execute read-only -> audit.
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 # Every tunable constant for the rolling z-score detector, in one place.
 # Exists so the method can be described, reviewed and re-tuned without reading the algorithm,
-# and so the Day 6 DAG and the validation harness provably run the same configuration.
+# and so the Airflow DAG and the validation harness provably run the same configuration.
 # Each value carries the reason it holds that number, because each one is a real trade-off.
 
 # --- Stage 1: seasonal baseline -------------------------------------------------------

@@ -97,7 +97,7 @@ def weekly_factor(day, channel):
 
 def yearly_factor(day):
     """Annual shape: a mild sine wave for the spring/summer cycle plus a Gaussian Q4 bump
-    peaking in early December. This is the seasonality Day 5's rolling baseline must absorb."""
+    peaking in early December. This is the seasonality the detector's rolling baseline must absorb."""
     day_of_year = day.timetuple().tm_yday
     sine = 0.10 * math.sin(2 * math.pi * (day_of_year - 80) / 365.25)
     q4_peak = date(day.year, 12, 8).timetuple().tm_yday

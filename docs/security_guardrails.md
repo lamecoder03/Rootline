@@ -622,7 +622,7 @@ means it does not need to be for a routine `dbt build`, and adding a fourth task
 orchestration decision, not a guardrail one.
 
 `tests/test_guardrails.py` uses plain asserts and a small runner rather than pytest, because pytest
-is not a dependency of this project and CI is explicitly deferred in the locked scope.
+is not a dependency of this project and CI is explicitly deferred in the documented scope.
 
 ---
 

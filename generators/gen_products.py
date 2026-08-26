@@ -1,6 +1,6 @@
 # Generates the product dimension and the daily inventory snapshot behind it.
 # The product master is deliberately dirty — two source systems, duplicate SKUs, clashing
-# category names, missing values — because cleaning it is Day 3's dbt staging exercise.
+# category names, missing values — because cleaning it is the dbt staging exercise.
 # The snapshot simulates real stock depletion and carries the ANOM-02 stockout as evidence.
 
 import numpy as np
@@ -56,7 +56,7 @@ CATEGORY_UNIT_COST = {
 }
 
 # The same category under two source systems. Reconciling these to one canonical label is
-# the single most important thing Day 3's staging layer has to get right.
+# the single most important thing the staging layer has to get right.
 CATEGORY_ALIASES = {
     "Electronics": {
         "erp_prod": ["Electronics", "ELECTRONICS", "electronics"],

@@ -454,7 +454,7 @@ justified by that measurement rather than by cost.
 > `INSERT` on the audit table. Verified live: 6 objects readable, 4 forbidden schema reads
 > refused, 5 write attempts refused.
 >
-> The `.pbix` is built by hand from `docs/day9_dashboard_build_guide.md` and does not exist yet.
+> The `.pbix` is built by hand from `docs/dashboard_build_guide.md` and does not exist yet.
 > Screenshots and the file land here once it has actually been built and checked.
 
 ---
@@ -500,7 +500,7 @@ dbt's `env_var()` reads the environment and nothing else populates it from the f
 | `docs/marts_and_allocation.md` | Spend allocation and the uncosted-SKU decision |
 | `docs/detection_and_prioritisation.md` | Full method and validation |
 | `docs/security_guardrails.md` | Each guardrail, and the complete attack transcript |
-| `docs/day9_powerbi_connection.md` · `day9_dax_measures.md` · `day9_dashboard_build_guide.md` | Connection, measures with their assumptions, step-by-step build (**not yet built**) |
+| `docs/powerbi_connection.md` · `dax_measures.md` · `dashboard_build_guide.md` | Connection, measures with their assumptions, step-by-step build (**not yet built**) |
 
 ---
 
@@ -533,7 +533,7 @@ dbt's `env_var()` reads the environment and nothing else populates it from the f
 
 **Platform**
 
-- **CI.** Deliberately deferred in the locked scope, and the first thing I'd add: run the 191 dbt
+- **CI.** Deliberately deferred in the documented scope, and the first thing I'd add: run the 191 dbt
   tests, the 22 guardrail unit tests and the attack harness on every push. The attack harness in
   particular is exactly the kind of thing that rots silently.
 - **Incremental dbt models.** The pipeline rebuilds all 43,860 rows every run. Fine at this size,

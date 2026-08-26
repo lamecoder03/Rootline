@@ -1,4 +1,4 @@
-# Documentation and tests for the staging layer — the contract Day 4's marts build on.
+# Documentation and tests for the staging layer — the contract the marts build on.
 # Exists so the cleaning is proven rather than asserted: the tests here fail loudly if a
 # category spelling survives, a grain doubles up, or a SKU key stops reconciling.
 # Uses the dbt >= 1.11 spelling: `data_tests:` with generic-test args under `arguments:`.
@@ -12,7 +12,7 @@ models:
     description: >
       Typed daily revenue. Grain: one row per order_date x category x channel x region,
       declared by revenue_key. 43,860 rows. The three injected anomalies are present but
-      unflagged — detecting them is Day 5's job, not staging's.
+      unflagged — detecting them is the detector's job, not staging's.
     columns:
       - name: revenue_key
         description: "md5 surrogate key over the four grain columns. Composite grain in one testable column."
@@ -71,7 +71,7 @@ models:
       Typed daily marketing spend. Grain: one row per spend_date x channel x category,
       declared by spend_key. 10,965 rows. Deliberately one grain coarser than revenue —
       it has no region — and left that way on purpose. Allocating spend across regions is a
-      business decision, so it belongs in the Day 4 mart where it is visible, not hidden
+      business decision, so it belongs in the mart where it is visible, not hidden
       inside a model whose stated job is cleaning.
     columns:
       - name: spend_key

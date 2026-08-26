@@ -1,7 +1,7 @@
 -- Types raw.marketing_spend into the spend fact at date x channel x category.
 -- Exists as the spend side of root-cause analysis: it is what the agent checks first when
 -- revenue moves, and it is the negative control for ANOM-02, which has no spend footprint.
--- Casts explicitly and keeps the source grain — the roll-up onto revenue is Day 4 mart work.
+-- Casts explicitly and keeps the source grain — the roll-up onto revenue is marts work.
 
 with source as (
 

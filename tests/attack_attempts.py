@@ -63,7 +63,7 @@ def _record(audit, **fields):
 
 
 def guarded_call(engine, audit, budget, sql, tool_input=None, expect_block=True):
-    """The full guardrail chain, in the order Day 8 will run it. One audit row is written per
+    """The full guardrail chain, in the order the agent runs it. One audit row is written per
     attempt in a finally block, so a rejection and an exception are both recorded rather than
     only the happy path."""
     tool_input = tool_input or {"sql": sql}
@@ -253,7 +253,7 @@ def section_validator(agent_engine, audit, budget):
          "SELECT * FROM analytics.fct_daily_revenue"),
         ("LIMIT 999999 - cap must be clamped down",
          "SELECT * FROM analytics.fct_daily_revenue LIMIT 999999"),
-        # The function allowlist's regression set: an over-tight list fails silently at Day 8
+        # The function allowlist's regression set: an over-tight list fails silently once the agent runs
         # rather than loudly here. These run against the real warehouse, so they prove the
         # permitted functions actually execute, not merely that they parse.
         ("aggregates, date bucketing and a null-guarded ratio",

@@ -1,6 +1,6 @@
 # Ground truth — injected anomalies
 
-The answer key for the synthetic dataset. Day 5's detection logic is scored against this
+The answer key for the synthetic dataset. The detection logic is scored against this
 file, so every figure here is exact rather than descriptive.
 
 **This file is never loaded into Postgres.** The warehouse holds only the blind series;

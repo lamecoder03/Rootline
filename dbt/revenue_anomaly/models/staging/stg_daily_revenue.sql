@@ -1,5 +1,5 @@
 -- Types raw.daily_revenue into the revenue fact at date x category x channel x region.
--- Exists because marts, the Day 5 z-score detector, and the agent all read revenue from
+-- Exists because marts, the z-score detector, and the agent all read revenue from
 -- here, so the casts and the grain are declared once instead of in every consumer.
 -- Casts every column explicitly, trims the dimension strings, and stamps an md5 grain key.
 

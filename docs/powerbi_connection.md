@@ -1,4 +1,4 @@
-# Day 9 — Connecting Power BI Desktop to the warehouse
+# Connecting Power BI Desktop to the warehouse
 
 > **NOT YET BUILT — prep work only, dashboard not implemented.** The database side (the
 > `revenue_reporting` role) is provisioned and verified; the `.pbix` file described here does
@@ -6,7 +6,7 @@
 
 How Power BI Desktop reaches the `analytics` marts, which login it uses, and why that login
 exists at all. The dashboard itself is built by hand from
-`docs/day9_dashboard_build_guide.md`; this document is the connection layer underneath it.
+`docs/dashboard_build_guide.md`; this document is the connection layer underneath it.
 
 ---
 
@@ -17,11 +17,11 @@ There are now three logins against one database, and the split is the point.
 | Role | Who uses it | Privileges | Created by |
 |---|---|---|---|
 | `revenue_ops` | dbt, the loader, the detector, Airflow | Owner. Creates and drops every object | `docker-compose.yml` / initdb |
-| `revenue_agent` | The Day 8 autonomous agent | `SELECT` on `analytics`, `INSERT` on `audit.agent_tool_calls` | `agent/guardrails/provision.py` |
+| `revenue_agent` | The autonomous investigation agent | `SELECT` on `analytics`, `INSERT` on `audit.agent_tool_calls` | `agent/guardrails/provision.py` |
 | **`revenue_reporting`** | **Power BI Desktop** | **`SELECT` on `analytics`, nothing else** | **`dashboards/provision_reporting.py`** |
 
-Day 7 established that an agent which can query a production-shaped database is a security
-story. Day 9 applies the identical reasoning to the second consumer of the same marts, and the
+This project established early that an agent which can query a production-shaped database is a security
+story. The reporting layer applies the identical reasoning to the second consumer of the same marts, and the
 argument does not depend on anyone distrusting Power BI:
 
 1. **Least privilege is per-consumer, not per-system.** The agent and the dashboard read the
@@ -94,7 +94,7 @@ Import is correct here, and the reason is not just "it is faster":
 - **The data is daily-batch, not live.** It changes when the Airflow DAG runs, not continuously.
   DirectQuery's only real advantage is freshness the source cannot actually provide.
 - **DAX is not fully available in DirectQuery.** Several measures in
-  `docs/day9_dax_measures.md` — particularly the severity banding and the weighted-ratio
+  `docs/dax_measures.md` — particularly the severity banding and the weighted-ratio
   patterns — are either unsupported or fold into slow SQL under DirectQuery.
 - **It keeps the warehouse out of the interactive path.** Every slicer click in DirectQuery is a
   query against Postgres. With Import, exploring the dashboard cannot affect the database the

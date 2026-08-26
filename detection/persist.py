@@ -1,4 +1,4 @@
-# Writes detector output to Postgres so Day 6's DAG and Day 8's agent read a table, not a
+# Writes detector output to Postgres so the Airflow DAG and the agent read a table, not a
 # printed report.
 # Exists because detection output is an input to two later stages: the agent must be able to ask
 # "what fired, where, how bad" in SQL, under the read-only grant on the analytics schema.
@@ -28,7 +28,7 @@ POINT_COLUMNS = [
 
 
 def build_engine():
-    """Same connection contract as the Day 2 loader: credentials from .env, never from source,
+    """Same connection contract as the ingest loader: credentials from .env, never from source,
     and URL.create escapes them so a password containing @ or : cannot corrupt the DSN."""
     load_dotenv(os.path.join(REPO_ROOT, ".env"))
     missing = [
@@ -77,7 +77,7 @@ def persist_coverage(engine, coverage, run_id, detected_at):
 
 
 def persist(engine, episodes, points, run_id, detected_at):
-    """Replaces both tables wholesale on every run, exactly like the Day 2 loader.
+    """Replaces both tables wholesale on every run, exactly like the ingest loader.
     Chosen over append-with-history because the detector is deterministic over a fixed window:
     re-running must converge on one answer rather than accumulate duplicates each time the DAG
     fires. run_id and detected_at record which run produced the rows that are there."""

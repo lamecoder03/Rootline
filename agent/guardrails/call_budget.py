@@ -61,7 +61,7 @@ class CallBudget:
 
 
 class BudgetedInvestigation:
-    """Context-manager form for the Day 8 loop: opens a budget, lets the body run, and converts
+    """Context-manager form for the agent loop: opens a budget, lets the body run, and converts
     exhaustion into a clean early exit instead of a crash - which is what "returns a partial
     brief rather than running unbounded" has to mean in code."""
 
