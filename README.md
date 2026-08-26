@@ -9,7 +9,7 @@ sanity-check the brief.
 
 ---
 
-## For AIC judges — BusinessIntelligence.ai
+##BusinessIntelligence.ai
 
 **The problem.** A Revenue Ops lead learns about a sales dip when someone spots it in the weekly
 report — three to seven days late, with no explanation attached, and by then the cause is cold and
