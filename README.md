@@ -9,6 +9,46 @@ sanity-check the brief.
 
 ---
 
+## For AIC judges — BusinessIntelligence.ai
+
+**The problem.** A Revenue Ops lead learns about a sales dip when someone spots it in the weekly
+report — three to seven days late, with no explanation attached, and by then the cause is cold and
+the revenue unrecoverable. Answering "why" costs an analyst most of a day of manual pulls across
+sales, marketing spend and inventory, and the answer arrives after the window to act on it has
+closed. The hard part is not charting the dip; it is that a real incident can be invisible in the
+total (the largest event here touches 3 of 60 cells), the most available explanation is usually
+the wrong one (spend correlates with revenue at ~0.85 by construction), and anything that turns
+model output into SQL against a production-shaped warehouse is a security problem before it is a
+useful one.
+
+**The solution.** A governed KPI intelligence-to-action pipeline: dbt reconciles five
+heterogeneous sources into a tested analytics layer, a per-cell rolling z-score detector separates
+real movement from noise, and an LLM agent investigates each incident against six read-only marts
+— ranking candidate drivers, ruling out the ones the data eliminates, and writing a brief with
+its evidence trail attached. The investigation runs **once**; personas, action recommendations and
+feedback all render from that same evidence, so an executive and an analyst can never be told
+different facts. The agent reaches the warehouse only through a read-only role, a sqlglot AST
+validator, an append-only audit log and a hard tool-call ceiling — all four built and attacked
+before the agent existed. When the evidence does not support a cause, the system says so and
+recommends nothing; that abstention path is demonstrated on a real transcript, not an example.
+
+| # | Objective | Satisfied by |
+|---|---|---|
+| 1 | Detect & prioritise | [`detection/`](detection/), [`docs/detection_and_prioritisation.md`](docs/detection_and_prioritisation.md) |
+| 2 | Reconcile heterogeneous sources | [`docs/data_reconciliation.md`](docs/data_reconciliation.md), [`docs/marts_and_allocation.md`](docs/marts_and_allocation.md) |
+| 3 | Rank drivers | [`agent/investigator.py`](agent/investigator.py), [`docs/sample_briefs/`](docs/sample_briefs/) |
+| 4 | Persona narratives | [`agent/personas.py`](agent/personas.py), [`docs/aic_personas_and_actions.md`](docs/aic_personas_and_actions.md) |
+| 5 | Abstention / low confidence | DET-0018 real transcript, [`docs/aic_personas_and_actions.md`](docs/aic_personas_and_actions.md) |
+| 6 | Action recommendations | [`agent/actions.py`](agent/actions.py) |
+| 7 | Feedback loop | [`agent/feedback.py`](agent/feedback.py), [`docs/aic_feedback_loop.md`](docs/aic_feedback_loop.md) |
+| 8 | Security, cost, latency, scale | [`agent/guardrails/`](agent/guardrails/), [`docs/aic_runtime_telemetry.md`](docs/aic_runtime_telemetry.md), [`docs/aic_rbac_scenario.md`](docs/aic_rbac_scenario.md) |
+
+**Eval status: 5 of 10 scenarios scored, 2 passed** — throughput-limited by the free-tier quota at
+~4 investigations/day, measured and reported in
+[`docs/aic_runtime_telemetry.md`](docs/aic_runtime_telemetry.md) rather than estimated.
+
+---
+
 ## The Problem
 
 The Revenue Ops lead at a retail company finds out about a sales drop the same way everyone else
