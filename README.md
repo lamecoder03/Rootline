@@ -4,12 +4,12 @@ An automated analyst that watches daily revenue, decides which movements are sta
 investigates the likely cause against a governed warehouse, and writes the brief a human would
 otherwise have spent a day producing.
 
-**The deliverable is the written brief, not the dashboard.** The dashboard exists so a human can
-sanity-check the brief.
+**The deliverable is the written brief.** Not a chart that shows revenue fell — a written
+explanation of why it fell, what to do about it, and the evidence behind both.
 
 ---
 
-##BusinessIntelligence.ai
+## BusinessIntelligence.ai
 
 **The problem.** A Revenue Ops lead learns about a sales dip when someone spots it in the weekly
 report — three to seven days late, with no explanation attached, and by then the cause is cold and
@@ -32,7 +32,7 @@ validator, an append-only audit log and a hard tool-call ceiling — all four bu
 before the agent existed. When the evidence does not support a cause, the system says so and
 recommends nothing; that abstention path is demonstrated on a real transcript, not an example.
 
-| # | Objective | Satisfied by |
+| # | Capability | Implemented in |
 |---|---|---|
 | 1 | Detect & prioritise | [`detection/`](detection/), [`docs/detection_and_prioritisation.md`](docs/detection_and_prioritisation.md) |
 | 2 | Reconcile heterogeneous sources | [`docs/data_reconciliation.md`](docs/data_reconciliation.md), [`docs/marts_and_allocation.md`](docs/marts_and_allocation.md) |
@@ -49,19 +49,9 @@ recommends nothing; that abstention path is demonstrated on a real transcript, n
 
 ---
 
-## The Problem
+## Why this is hard
 
-The Revenue Ops lead at a retail company finds out about a sales drop the same way everyone else
-does: someone notices it in the weekly report. By that point the drop is typically three to seven
-days old, and the report says only that revenue is down — not which category, channel, or region
-moved, and not why. Someone then spends the better part of a day pulling numbers to answer a
-question that has already gone stale, and the window to act on the cause has usually closed.
-
-This project closes that gap: it watches daily revenue as it lands, separates a real drop from
-ordinary daily fluctuation, checks the usual suspects — marketing spend, inventory, and outside
-factors — and writes up what it found, before anyone has opened the weekly report.
-
-Three things make that harder than it sounds, and each drove a design decision below:
+Three things make this harder than charting a dip, and each drove a design decision below:
 
 1. **A real incident can be invisible in the total.** The largest injected event in this dataset
    touches 3 of 60 category × channel × region cells. Aggregate the series and it disappears
@@ -81,45 +71,57 @@ Built layer by layer, each one tested before the next was started.
 
 ```mermaid
 flowchart TB
-    subgraph GEN ["generators/ · synthetic source data"]
+    subgraph SRC ["1 · Source data"]
         G["orders · marketing spend · inventory<br/>product master · holiday calendar<br/><b>SEED=42 · 731 days · 60 cells</b>"]
     end
 
-    subgraph PG ["PostgreSQL 15 · Docker"]
-        direction TB
-        RAW["<b>raw</b> · 5 tables, 142,733 rows<br/><i>3 anomalies injected blind — no flags</i>"]
-        STG["<b>staging</b> · 7 dbt models<br/><i>dedupe SKUs, conform grain, 81 tests</i>"]
-        INT["<b>intermediate</b> · 2 models<br/><i>spend allocation, cost basis</i>"]
-        ANA["<b>analytics</b> · 6 objects<br/><i>4 marts + 2 detector tables</i>"]
-        AUD["<b>audit</b> · append-only<br/><i>every agent tool call</i>"]
+    subgraph WH ["2 · Governed warehouse — PostgreSQL 15"]
+        direction LR
+        RAW["<b>raw</b><br/>5 tables · 142,754 rows<br/><i>3 anomalies injected blind</i>"]
+        STG["<b>staging</b><br/>7 models · 81 tests<br/><i>dedupe · conform grain</i>"]
+        INT["<b>intermediate</b><br/>2 models<br/><i>spend allocation · cost basis</i>"]
+        ANA["<b>analytics</b><br/>7 objects<br/><i>4 marts + 3 detector tables</i>"]
+        RAW --> STG --> INT --> ANA
     end
 
-    subgraph DET ["detection/ · rolling z-score"]
-        D["per-cell baseline → common-factor<br/>→ robust scale → Efron calibration<br/>→ window pooling + BH-FDR q&lt;0.01"]
+    subgraph DET ["3 · Statistical detection — no LLM"]
+        D["per-cell baseline → common factor → robust scale<br/>→ empirical calibration → pooling + BH-FDR q&lt;0.01"]
     end
 
-    subgraph AGT ["agent/ · investigation loop"]
-        A["LLM + one tool<br/><b>query_warehouse</b>"]
-        W["<b>Security guardrails</b><br/>sqlglot AST validator<br/>read-only role · row cap · call cap"]
+    subgraph AGT ["4 · Investigation — LLM with one tool"]
+        W["<b>GUARDRAILS</b><br/>sqlglot AST validator · read-only role<br/>row cap · 8-call ceiling"]
+        A["agent loop<br/><b>query_warehouse</b>"]
     end
+
+    subgraph OUT ["5 · Delivery — investigated once, rendered per audience"]
+        BRIEF["<b>brief + evidence trail</b>"]
+        ACT["action chain<br/><i>driver → lever → action → owner</i>"]
+        PER["executive render<br/>analyst render"]
+        BRIEF --> ACT --> PER
+    end
+
+    AUD["<b>audit</b> · append-only<br/><i>every attempt, refused ones included</i>"]
+    FB["<b>feedback</b><br/><i>human verdict, tied to the investigation</i>"]
 
     G -->|load_to_postgres.py| RAW
-    RAW -->|dbt| STG --> INT --> ANA
-    ANA --> D -->|"44 episodes<br/>166 flagged days"| ANA
-    ANA -->|"SELECT as <b>revenue_agent</b>"| W
+    ANA --> D -->|"44 episodes · 166 flagged days"| ANA
+    ANA -->|"SELECT as revenue_agent"| W
     A <-->|"every query, no exceptions"| W
-    W -.->|"logs every attempt"| AUD
-    A -->|writes| BRIEF["<b>docs/sample_briefs/</b><br/>markdown brief + evidence trail"]
-    ANA -->|"SELECT as <b>revenue_reporting</b>"| BI["Read-only BI client<br/><i>human sanity-check</i>"]
+    W -.->|logs every attempt| AUD
+    A --> BRIEF
+    PER -.-> FB
+    FB -.->|"informs a human, never auto-tunes"| D
 
-    AIRFLOW(["<b>Airflow DAG</b><br/>ingest → transform → detect"]) -.->|orchestrates| RAW
+    AIRFLOW(["<b>Airflow DAG</b> · ingest → transform → detect"]) -.-> RAW
     AIRFLOW -.-> STG
     AIRFLOW -.-> D
 
-    style W fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
-    style AUD fill:#7f1d1d,stroke:#ef4444,color:#fff
-    style BRIEF fill:#14532d,stroke:#22c55e,color:#fff
+    style W fill:#7f1d1d,stroke:#ef4444,stroke-width:3px,color:#fff
+    style AUD fill:#7f1d1d,stroke:#ef4444,stroke-width:2px,color:#fff
+    style BRIEF fill:#14532d,stroke:#22c55e,stroke-width:2px,color:#fff
+    style PER fill:#14532d,stroke:#22c55e,color:#fff
     style AIRFLOW fill:#1e3a5f,stroke:#3b82f6,color:#fff
+    style FB fill:#3f3f46,stroke:#a1a1aa,color:#fff
 ```
 
 The two red boxes are the point of the design: **there is no path from the agent to the warehouse
@@ -134,7 +136,7 @@ including the ones that were refused.
 | **Allowlists, never denylists** | Tables, statement types and SQL functions. The one denylist in the design leaked six functions and was inverted |
 | **State the assumption in the name** | `estimated_gross_margin`, `spend_allocation_basis`, `is_margin_estimable` — an approximation that doesn't announce itself gets quoted as fact |
 | **Evidence over assertion** | Every brief ships with the SQL that produced it; every detection claim is scored against a held-out answer key |
-| **Verified, or it isn't done** | No layer has been marked done on unverified work — including right now |
+| **Verified, or it isn't done** | No layer is marked complete on unverified work, and unfinished work is named as unfinished |
 
 ---
 
@@ -396,47 +398,33 @@ The chain was then re-verified end to end through the new Groq adapter with ever
 by the live model: 7 tool calls attempted, 6 executed, 1 refused by the validator, the call cap
 fired on cue, 7 audit rows written, all under `db_role = revenue_agent`.
 
-One honest note from that run: the model **self-refused 5 of 7 attack prompts** before the
-validator ever saw them. That's defence in depth, not a passed guardrail test, so the probe set
-was extended until attempts actually reached the wall.
+One methodological note: the model **self-refused 5 of 7 attack prompts** before the validator
+ever saw them. Model reluctance is defence in depth, not evidence that the wall holds — so the
+probe set was extended until attempts actually reached it.
 
 ### Agent investigation quality
 
-> ### ⏳ [PENDING: agent eval results — 10-scenario run against `gpt-oss-120b`, **0 of 10 scored**]
->
-> **Nothing is reported here yet because nothing has been measured yet.** The eval harness, the
-> answer key and the grader are built and committed; the scored run has not completed.
->
-> **What exists:** a 10-scenario answer key — the 3 ground-truth anomalies transcribed from
-> `docs/ground_truth_anomalies.md`, plus 7 detected episodes whose expected conclusions were
-> decided **by the project owner**, from raw evidence, before any brief was generated. The agent's
-> agent does not get to write the standard it is graded against. The grader extracts
-> structured claims via a forced tool call, then compares them mechanically, so no pass/fail
-> depends on a model's opinion of "close enough".
->
-> **Why it hasn't finished:** the free tier meters 8,000 tokens/minute *and* 200,000 tokens per
-> **rolling 24 hours** — not a midnight reset. Because every tool call re-sends the whole
-> conversation, one investigation costs ~40,000 tokens, so the daily quota sustains roughly five.
-> The last attempt was stopped mid-way through the first scenario with the quota exhausted, and
-> scored nothing. The harness writes results after every scenario and merges across runs, so the
-> sweep can be completed in batches without losing what it already scored.
->
-> **Exactly what does not exist yet**, stated plainly so nothing here reads as a missing file
-> rather than unfinished work:
->
-> | Artifact | Path it will occupy | Status |
-> |---|---|---|
-> | Scored eval results | `docs/sample_briefs/eval_results.json` | **Not created** — no run has completed a scenario |
-> | Generated briefs | `docs/sample_briefs/*.md` | **None** — directory is empty |
-> | Written eval summary | *(no file)* | **Not written** — waiting on the run above |
->
-> What *does* exist and is committed: the harness (`agent/eval/run_eval.py`), the 10-scenario
-> answer key (`agent/eval/answer_key.py`), and the claim-extracting grader
-> (`agent/eval/grader.py`).
->
-> **This section will report the real pass rate, the misses, and whether ANOM-02's negative
-> control was handled correctly** — i.e. whether the brief explicitly *rules out* marketing spend
-> rather than inventing a spend-based explanation. Including if the numbers are poor.
+Scored against a 10-scenario answer key: the 3 ground-truth anomalies transcribed from
+`docs/ground_truth_anomalies.md`, plus 7 detected episodes whose expected conclusions were fixed
+from raw evidence **before any brief was generated** — the agent does not get to write the
+standard it is graded against. The grader extracts structured claims by forced tool call and
+compares them mechanically, so no pass/fail rests on a model's opinion of "close enough".
+
+**5 of 10 scenarios scored so far; 2 passed.** The remainder is a throughput limit rather than a
+blocked feature: the free tier meters 8,000 tokens/minute and 200,000 per rolling 24 hours, and
+one investigation costs ~47,000 tokens, so the quota sustains roughly four per day. Results are
+written after every scenario and merged across runs, so the sweep completes in batches without
+losing what it already scored.
+
+**Diagnosis is stronger than the pass rate suggests: 4 of the 5 named the correct primary cause.**
+Failures concentrate in rubric completeness — explicitly restating a ruled-out cause, or stating
+that the cause preceded the effect — not in reaching the wrong answer. The negative control was
+handled correctly: on the stockout the brief named inventory and *explicitly ruled out* marketing
+spend with figures ($108.35/day before, $107.77/day during) rather than inventing a spend story.
+The one wrong headline was an abstention, not a fabrication — it queried spend only for dates
+before the incident window, so it declined to name a cause it had no evidence for.
+
+Raw results: `docs/sample_briefs/eval_results.json`. Generated briefs: `docs/sample_briefs/eval/`.
 
 One measured finding already recorded, because it changed the design: at a 20-call ceiling the
 agent spent all 20 calls and re-queried tables it had already read, then produced no brief at all.
@@ -444,20 +432,6 @@ The cause is the context window — past roughly eight results the oldest are el
 model notices a figure it needs is gone, and spends the next call re-fetching it, which evicts
 another. **The marginal call beyond ~8 destroys more evidence than it adds.** The ceiling is now 8,
 justified by that measurement rather than by cost.
-
-### Read-only reporting access
-
-**The deliverable of this project is the written brief, not a dashboard**, and no BI client is
-part of it. What exists is the *access boundary* a BI client would connect through, built and
-verified as a third identity:
-
-`revenue_reporting` holds `SELECT` on `analytics` and nothing else — deliberately **tighter** than
-the agent, which also holds `INSERT` on the audit table. A reporting consumer has nothing to
-record, and read access to the audit schema would expose every query the agent ever ran.
-
-Verified live by `python -m dashboards.provision_reporting --verify`: 6 `analytics` objects
-readable, 4 forbidden schema reads refused (`raw`, `staging`, `intermediate`, `audit`), 5 write
-attempts refused. That boundary is the point; which tool sits on top of it is not.
 
 ---
 
@@ -476,7 +450,7 @@ python -m agent.guardrails.provision      # read-only agent role + audit table
 python -m tests.test_guardrails           # 22 unit tests, no database
 python -m tests.attack_attempts           # 83 live attack attempts
 
-python -m dashboards.provision_reporting --verify   # BI role + boundary proof
+python -m dashboards.provision_reporting --verify   # third read-only role + boundary proof
 python -m agent.run_investigation --anomaly-key DET-0023
 ```
 
@@ -502,7 +476,13 @@ dbt's `env_var()` reads the environment and nothing else populates it from the f
 | `docs/marts_and_allocation.md` | Spend allocation and the uncosted-SKU decision |
 | `docs/detection_and_prioritisation.md` | Full method and validation |
 | `docs/security_guardrails.md` | Each guardrail, and the complete attack transcript |
+| `docs/aic_kpi_semantic_contract.md` | KPI definitions, drivers, thresholds, lineage and access |
+| `docs/aic_personas_and_actions.md` | Persona rendering and the action chain, with the abstention case |
+| `docs/aic_feedback_loop.md` | What feedback is captured, and what production would extend |
+| `docs/aic_runtime_telemetry.md` | Measured latency, model calls, tokens and cost |
 | `docs/aic_rbac_scenario.md` | Role-based access: the three identities and what each may reach |
+| `docs/aic_llm_vs_nonllm_breakdown.md` | Which layers use a model, and which deliberately do not |
+| `docs/aic_sparse_history_scenario.md` | Behaviour on a newly launched cell with 21 days of history |
 
 ---
 

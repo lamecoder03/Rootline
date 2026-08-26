@@ -134,7 +134,7 @@ were all refused.
 
 ## Defence in depth: three independent layers
 
-A judge should note that the role is the **last** line, not the only one.
+Worth noting: the role is the **last** line of defence, not the only one.
 
 | Layer | Mechanism | Fails closed by |
 |---|---|---|
