@@ -5,16 +5,18 @@ downstream is presentation.** A Revenue Ops analyst and a VP read different docu
 the same evidence, the same diagnosis and the same action record — so they can never be told
 different facts about the same incident.
 
-Rendered examples, produced by the pipeline and not by hand:
-
-| Incident | Analyst render | Executive render | Structured actions |
-|---|---|---|---|
-| DET-0023 — Electronics/Marketplace/West stockout | [`DET-0023-analyst.md`](sample_briefs/personas/DET-0023-analyst.md) | [`DET-0023-executive.md`](sample_briefs/personas/DET-0023-executive.md) | [`DET-0023-actions.json`](sample_briefs/personas/DET-0023-actions.json) |
-| DET-0018 — Home & Garden/Web/West, no cause found | [`DET-0018-analyst.md`](sample_briefs/personas/DET-0018-analyst.md) | [`DET-0018-executive.md`](sample_briefs/personas/DET-0018-executive.md) | [`DET-0018-actions.json`](sample_briefs/personas/DET-0018-actions.json) |
+Both examples below are produced by the pipeline, not written by hand. Regenerate them with:
 
 ```
 python -m agent.render_brief --anomaly-key DET-0023 --anomaly-key DET-0018 --subdir eval
 ```
+
+That writes three files per incident into `docs/sample_briefs/personas/`:
+
+| Incident | Analyst render | Executive render | Structured actions |
+|---|---|---|---|
+| DET-0023 — Electronics/Marketplace/West stockout | `DET-0023-analyst.md` | `DET-0023-executive.md` | `DET-0023-actions.json` |
+| DET-0018 — Home & Garden/Web/West, no cause found | `DET-0018-analyst.md` | `DET-0018-executive.md` | `DET-0018-actions.json` |
 
 ---
 

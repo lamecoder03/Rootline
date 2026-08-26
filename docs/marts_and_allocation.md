@@ -65,7 +65,7 @@ during the stockout, so West's same-day revenue share collapses, so its allocate
 collapses with it — even though not one real dollar of spend changed. An agent reading the
 result sees spend and revenue falling together and concludes that a marketing cut caused a
 stockout. It would be wrong, it would be confident, and the number it was reading would have
-been manufactured by my own allocation rule.
+been manufactured by the allocation rule itself.
 
 This is circular reasoning baked into a table: **the anomaly would be feeding into its own
 explanation.**

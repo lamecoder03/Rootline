@@ -225,7 +225,7 @@ AST function nodes rather than query text.
 
 This started as a *denylist* — about 18 known-dangerous names — and that was wrong. It was the
 one asymmetry in a design that is otherwise allowlists all the way down, and it meant any function
-nobody thought to name was permitted by default. I originally documented it as harmless
+nobody thought to name was permitted by default. It was originally documented as harmless
 belt-and-braces on the grounds that the read-only role would catch whatever slipped through.
 **That was not true, and testing it showed so.** Six functions passed the validator *and*
 succeeded against the read-only role:
@@ -331,7 +331,7 @@ call fails. An unlogged tool call is the one outcome the design does not permit.
 **The residual gap, stated plainly.** The row is written in a `finally` block, after the outcome is
 known. A process killed mid-execution between the query and the log write would leave that call
 unrecorded. A two-phase design — an intent row before, an outcome row after — would close it, at
-the cost of two rows per call. Given a single-process portfolio agent, one row per call in a
+the cost of two rows per call. Given a single-process agent, one row per call in a
 `finally` is the trade-off taken, not an oversight.
 
 ---

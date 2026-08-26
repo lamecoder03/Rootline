@@ -4,7 +4,7 @@
 a human thought of a generated brief, ties that verdict to the investigation that produced it,
 and aggregates the result for review. **Nothing in this pipeline reads the feedback table to
 alter its own behaviour.** Closing the loop — changing a prompt, moving a threshold, retraining
-anything — is a human decision, deliberately left outside a two-day build. What production would
+anything — is a human decision, and is deliberately out of scope here. What production would
 extend is described at the end.
 
 ```
@@ -89,7 +89,7 @@ Everything below is **not built** here, and is listed so the gap is explicit rat
    be fitted per cell instead of set globally.
 3. **Feedback as an eval source.** A corrected brief is a new answer-key row. The eval currently
    scores against 10 hand-built scenarios; captured corrections would grow that set from real
-   operator disagreement instead of from the author's imagination.
+   operator disagreement rather than from a fixed, authored list.
 4. **Loop closure requires volume this project does not have.** Three verdicts cannot tune
    anything. The mechanism is built and proven to capture; acting on it needs months of real
    operator use, and pretending otherwise would be the dishonest version of this document.

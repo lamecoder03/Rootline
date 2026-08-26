@@ -336,7 +336,7 @@ anywhere outside `agent/llm/`**. Three adapters ship: `groq`, `anthropic`, and a
 `openai-compatible` one covering Together/OpenRouter/local vLLM by URL alone.
 
 That interface earned itself immediately. The project was built against the Anthropic API; partway
-through, the account ran out of credit and the author is a student who cannot fund it. Switching to
+through, the account ran out of credit and no paid budget was available. Switching to
 Groq's free tier cost one adapter and no change to the investigation logic — and, critically,
 **no change to any guardrail**. Verified mechanically: `git status --short agent/guardrails/
 agent/audit/` is empty across the pivot.
@@ -410,7 +410,7 @@ was extended until attempts actually reached the wall.
 > **What exists:** a 10-scenario answer key — the 3 ground-truth anomalies transcribed from
 > `docs/ground_truth_anomalies.md`, plus 7 detected episodes whose expected conclusions were
 > decided **by the project owner**, from raw evidence, before any brief was generated. The agent's
-> author does not get to write the standard the agent is graded against. The grader extracts
+> agent does not get to write the standard it is graded against. The grader extracts
 > structured claims via a forced tool call, then compares them mechanically, so no pass/fail
 > depends on a model's opinion of "close enough".
 >
@@ -506,7 +506,7 @@ dbt's `env_var()` reads the environment and nothing else populates it from the f
 
 ---
 
-## What I'd do with more time
+## Roadmap and known limitations
 
 **Detection**
 
@@ -535,7 +535,7 @@ dbt's `env_var()` reads the environment and nothing else populates it from the f
 
 **Platform**
 
-- **CI.** Deliberately deferred in the documented scope, and the first thing I'd add: run the 191 dbt
+- **CI.** Deliberately deferred in the documented scope, and the highest-value addition: run the 191 dbt
   tests, the 22 guardrail unit tests and the attack harness on every push. The attack harness in
   particular is exactly the kind of thing that rots silently.
 - **Incremental dbt models.** The pipeline rebuilds all 43,860 rows every run. Fine at this size,
