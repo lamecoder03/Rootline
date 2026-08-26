@@ -58,9 +58,6 @@ agent/audit/*.jsonl
 agent/audit/*.log
 !agent/audit/.gitkeep
 
-# --- Power BI ---
-*.pbix.bak
-~$*.pbix
 
 # --- Editor / OS ---
 .claude/settings.local.json

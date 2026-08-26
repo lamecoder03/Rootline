@@ -1,7 +1,7 @@
 # Role-Based Security Scenario
 
 **The scenario:** two consumers read the same warehouse — an autonomous LLM agent that
-investigates anomalies, and a Power BI dashboard a human opens to check the agent's work. They
+investigates anomalies, and a read-only BI client a human would use to check the agent's work. They
 must not share an identity, and neither may reach the raw data.
 
 This is **built and verified**, not designed. Every table below was read from the running
@@ -15,7 +15,7 @@ database while writing this document.
 |---|---|---|---|
 | `revenue_ops` | dbt, loader, detector, Airflow | Owner — creates and drops every object | `docker-compose.yml` / initdb |
 | `revenue_agent` | The LLM investigator | Read marts, record its own tool calls | `agent/guardrails/provision.py` |
-| `revenue_reporting` | Power BI Desktop | Read marts | `dashboards/provision_reporting.py` |
+| `revenue_reporting` | A read-only BI client | Read marts | `dashboards/provision_reporting.py` |
 
 Credentials are separate `.env` entries per role. No code path hands agent code the owner's
 credentials — `agent/guardrails/db.py` exposes two engine builders, one per identity.
@@ -59,7 +59,7 @@ on each pipeline run, which drops the old table and creates a *new* one — carr
 yesterday's grants.
 
 Without a default-privilege rule, both consumers work perfectly until the next DAG run and then
-**silently lose access**. For the dashboard this surfaces as what looks like a Power BI
+**silently lose access**. For a BI client this surfaces as what looks like a client-side
 connection error; for the agent, as an investigation that suddenly cannot read anything.
 
 Verified live in `pg_default_acl`:
@@ -84,7 +84,7 @@ recreated) and re-reading all six objects as each role afterwards.
 > calls. `revenue_reporting` has **no access to the `audit` schema at all**.
 
 A dashboard has nothing to record, and read access there would expose **every query the agent
-ever ran** — including the refused ones — to anyone who opens the `.pbix`.
+ever ran** — including the refused ones — to anyone holding the reporting credentials.
 
 Three reasons a shared login was rejected:
 
@@ -96,7 +96,7 @@ Three reasons a shared login was rejected:
    investigating.
 
 Session limits differ for the same reason: the reporting role gets a **120s** `statement_timeout`
-(a Power BI import legitimately scans whole fact tables); the agent gets **30s** (an agent query
+(a BI import legitimately scans whole fact tables); the agent gets **30s** (an agent query
 never should).
 
 ---

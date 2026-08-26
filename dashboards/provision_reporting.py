@@ -1,4 +1,4 @@
-# Creates `revenue_reporting`, the read-only login Power BI Desktop connects as.
+# Creates `revenue_reporting`, the read-only login a BI client connects as.
 # Exists because a human's BI tool and an autonomous agent are two different consumers of the
 # same marts, and giving them one shared login makes "who read this?" unanswerable in the logs.
 # Same least-privilege shape as the guardrail layer's revenue_agent, deliberately NOT the same role.
@@ -26,7 +26,7 @@ ROLE_ENV_USER = "REPORTING_DB_USER"
 ROLE_ENV_PASSWORD = "REPORTING_DB_PASSWORD"
 
 # Longer than the agent's 30s. An agent query is interactive and a slow one means a bad query;
-# a Power BI import legitimately scans a whole 43,860-row fact table, and six of them in a
+# a BI import legitimately scans a whole 43,860-row fact table, and six of them in a
 # refresh. Still bounded, because an unbounded statement is how a BI tool takes a warehouse down.
 STATEMENT_TIMEOUT = "120s"
 
@@ -37,7 +37,7 @@ def reporting_credentials():
 
 
 def build_reporting_engine(**kwargs):
-    """The reporting identity. Used only to prove the grants are what they claim to be - Power BI
+    """The reporting identity. Used only to prove the grants are what they claim to be - a BI client
     opens its own connection with these same credentials."""
     from sqlalchemy import create_engine
 
@@ -85,7 +85,7 @@ def provision(verbose=True):
 
         # The line that keeps the grant alive across dbt rebuilds - the same one that matters for
         # the agent. Without it the dashboard works until the next DAG run, then breaks with a
-        # permission error that looks like a Power BI problem and is not.
+        # permission error that looks like a client-side problem and is not.
         cursor.execute(
             sql.SQL(
                 "ALTER DEFAULT PRIVILEGES FOR ROLE {} IN SCHEMA {} GRANT SELECT ON TABLES TO {}"
@@ -142,7 +142,7 @@ def verify():
     print(f"\nVERIFYING '{role}' against the live warehouse")
     print("=" * 78)
 
-    print(f"\n  Should ALLOW - the six {ANALYTICS_SCHEMA} objects Power BI imports:")
+    print(f"\n  Should ALLOW - the six {ANALYTICS_SCHEMA} objects a BI client imports:")
     for table in ALLOWED_TABLES:
         try:
             with engine.begin() as connection:

@@ -1,5 +1,5 @@
-# Documentation and tests for the analytics marts -- the only schema Power BI, the
-# detector and the agent are ever pointed at.
+# Documentation and tests for the analytics marts -- the only schema the detector, the
+# agent and any read-only reporting client are ever pointed at.
 # Exists so the contract those three consumers depend on is stated and enforced here rather
 # than rediscovered downstream. Uses the dbt >= 1.11 `arguments:` spelling for test args.
 

@@ -17,7 +17,7 @@ labelled, because a consumer needs to know what they are agreeing to when they r
 Both of today's decisions are assumptions someone could reasonably disagree with, so both live
 here, both are named in the model header, and both are enforced by tests.
 
-Four objects land in `analytics` — the only schema Power BI, the detector, and the investigation
+Four objects land in `analytics` — the only schema a BI client, the detector, and the investigation
 agent are ever pointed at:
 
 | Model | Grain | Rows | Materialisation |

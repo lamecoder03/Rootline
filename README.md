@@ -110,7 +110,7 @@ flowchart TB
     A <-->|"every query, no exceptions"| W
     W -.->|"logs every attempt"| AUD
     A -->|writes| BRIEF["<b>docs/sample_briefs/</b><br/>markdown brief + evidence trail"]
-    ANA -->|"SELECT as <b>revenue_reporting</b>"| BI["Power BI Desktop<br/><i>human sanity-check</i>"]
+    ANA -->|"SELECT as <b>revenue_reporting</b>"| BI["Read-only BI client<br/><i>human sanity-check</i>"]
 
     AIRFLOW(["<b>Airflow DAG</b><br/>ingest → transform → detect"]) -.->|orchestrates| RAW
     AIRFLOW -.-> STG
@@ -445,17 +445,19 @@ model notices a figure it needs is gone, and spends the next call re-fetching it
 another. **The marginal call beyond ~8 destroys more evidence than it adds.** The ceiling is now 8,
 justified by that measurement rather than by cost.
 
-### Dashboard
+### Read-only reporting access
 
-> ### ⏳ [PENDING: Power BI dashboard screenshots, manual build not yet complete]
->
-> The **database side is done and verified**: `revenue_reporting`, a third login holding `SELECT`
-> on `analytics` and nothing else — deliberately *tighter* than the agent, which also holds
-> `INSERT` on the audit table. Verified live: 6 objects readable, 4 forbidden schema reads
-> refused, 5 write attempts refused.
->
-> The `.pbix` is built by hand from `docs/dashboard_build_guide.md` and does not exist yet.
-> Screenshots and the file land here once it has actually been built and checked.
+**The deliverable of this project is the written brief, not a dashboard**, and no BI client is
+part of it. What exists is the *access boundary* a BI client would connect through, built and
+verified as a third identity:
+
+`revenue_reporting` holds `SELECT` on `analytics` and nothing else — deliberately **tighter** than
+the agent, which also holds `INSERT` on the audit table. A reporting consumer has nothing to
+record, and read access to the audit schema would expose every query the agent ever ran.
+
+Verified live by `python -m dashboards.provision_reporting --verify`: 6 `analytics` objects
+readable, 4 forbidden schema reads refused (`raw`, `staging`, `intermediate`, `audit`), 5 write
+attempts refused. That boundary is the point; which tool sits on top of it is not.
 
 ---
 
@@ -500,7 +502,7 @@ dbt's `env_var()` reads the environment and nothing else populates it from the f
 | `docs/marts_and_allocation.md` | Spend allocation and the uncosted-SKU decision |
 | `docs/detection_and_prioritisation.md` | Full method and validation |
 | `docs/security_guardrails.md` | Each guardrail, and the complete attack transcript |
-| `docs/powerbi_connection.md` · `dax_measures.md` · `dashboard_build_guide.md` | Connection, measures with their assumptions, step-by-step build (**not yet built**) |
+| `docs/aic_rbac_scenario.md` | Role-based access: the three identities and what each may reach |
 
 ---
 

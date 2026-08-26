@@ -153,10 +153,25 @@ Monday, Christmas Eve) fired **zero**.
 `end_date`, `day_count`, `direction`, `peak_date`, `peak_z_score`, `peak_delta_pct`,
 `total_revenue_delta_usd`, `min_q_value`.
 
-**There is no `severity` column, deliberately.** z measures distance from normal, not money.
-Measured across the 44 episodes, the Critical band (8 episodes, $83.7k) and High band (16,
-$85.2k) carry near-identical dollar impact. Any severity banding is a **presentation-layer**
-decision and is defined in `docs/dax_measures.md`, not in the warehouse.
+**There is no `severity` column, deliberately.** z measures distance from normal, not money. Any
+severity banding is a **presentation-layer** decision, defined by whatever consumes the table —
+never in the warehouse, so that two consumers cannot disagree about what the warehouse "said".
+
+The banding this project uses is anchored to the detector's own control limits (|z| ≥ 3 ordinary,
+≥ 4.8 holiday), and its measured distribution across the 44 episodes is the reason it must never
+be the only lens:
+
+| Band | Threshold | Episodes | Absolute revenue delta |
+|---|---|---|---|
+| 1 — Critical | \|z\| ≥ 8 | 8 | $83,719 |
+| 2 — High | 4.8 ≤ \|z\| < 8 | 16 | $85,189 |
+| 3 — Moderate | 3 ≤ \|z\| < 4.8 | 17 | $31,669 |
+| 4 — Low | \|z\| < 3 | 3 | $1,003 |
+
+**Critical and High carry near-identical dollar impact — $83.7k against $85.2k — despite a
+twofold difference in z.** A tiny cell can post a huge z on a trivial dollar move, so any ranking
+built on z alone must be shown beside `total_revenue_delta_usd`, not instead of it. Statistical
+confidence (`min_q_value`) is a third, separate axis.
 
 ---
 
@@ -216,7 +231,7 @@ convention. Full evidence in `docs/aic_rbac_scenario.md`.
 |---|---|---|---|---|---|
 | `revenue_ops` (owner: dbt, loader, detector) | ALL | ALL | ALL | ALL | ALL |
 | `revenue_agent` (the LLM investigator) | ✗ | ✗ | ✗ | **SELECT** | **INSERT only** |
-| `revenue_reporting` (Power BI) | ✗ | ✗ | ✗ | **SELECT** | ✗ |
+| `revenue_reporting` (BI client) | ✗ | ✗ | ✗ | **SELECT** | ✗ |
 
 Verified live: objects outside `analytics` lack schema `USAGE`, so they are **not addressable**,
 not merely unreadable.
@@ -231,7 +246,7 @@ cannot query it until someone adds it to the allowlist consciously.
 `revenue_reporting` is **strictly tighter** than `revenue_agent`: the agent holds `INSERT` on
 `audit.agent_tool_calls` because it must record its own tool calls; the dashboard role has no
 audit access at all, because read access there would expose every query the agent ever ran to
-anyone who opens the `.pbix`.
+anyone holding the reporting credentials.
 
 **Column- and domain-level protection.** The `analytics` schema contains no PII: the grain is
 category × channel × region, and the only identifiers are SKU codes. Supplier names are the one

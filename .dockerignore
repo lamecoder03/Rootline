@@ -14,4 +14,3 @@
 **/logs/
 data/raw/*.csv
 dashboards/
-*.pbix
