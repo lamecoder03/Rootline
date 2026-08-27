@@ -385,7 +385,7 @@ on the stockout the brief names inventory and *explicitly rules out* marketing s
 cp .env.example .env          # then set passwords
 docker compose up -d --build  # Postgres + Airflow
 
-python -m generators.load_to_postgres     # raw layer
+python generators\load_to_postgres.py     # raw layer
 run_dbt.bat build                         # staging + marts, 191 tests
 python -m detection.run_detection         # detect
 python -m detection.validate              # score against ground truth
