@@ -1,4 +1,6 @@
-# Revenue Anomaly Root-Cause Investigator
+# Rootline
+
+*Revenue anomalies, traced to cause.*
 
 An automated analyst that watches daily revenue, decides which movements are statistically real,
 investigates the likely cause against a governed warehouse, and writes the brief a human would
